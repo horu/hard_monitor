@@ -1,40 +1,31 @@
 import logging
 import os
+import time
 
-from PyQt5.QtCore import QTimer, QDateTime, QPoint
+from PyQt5.QtCore import QTimer, QDateTime, QPoint, QRect
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QMouseEvent
 
 import sys
-
 import hard_monitor
 
 LOG_LEVEL = os.environ.get('LOG_LEVEL', default='DEBUG')
 TRANSPARENCY = 0.5
-DAMAGE_PRINT_LIMIT = 1000
 
 
 def create_form() -> QFormLayout:
     form = QFormLayout()
     form.setHorizontalSpacing(0)
     form.setVerticalSpacing(0)
-    form.setRowWrapPolicy(QFormLayout.DontWrapRows)
     return form
 
 
-def convert_long_int(value: int) -> str:
-    if abs(value) > DAMAGE_PRINT_LIMIT:
-        return '{:.1f}'.format(value / DAMAGE_PRINT_LIMIT)
-    return str(value)
-
-
-def create_label(value: str = '', color: str = 'white') -> QLabel:
-    label = QLabel(value)
-    label.setFont(QFont('Monospace', 10))
-    label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-    label.setStyleSheet('background-color: rgba(0,0,0,0%); color: {}'.format(color))
-    return label
+def create_widget() -> QWidget:
+    widget = QWidget()
+    widget.setStyleSheet('padding :0px; background-color: rgba(0,0,0,{}%); color: white'
+                         .format(int(TRANSPARENCY * 100)))
+    return widget
 
 
 class Window(QMainWindow):
@@ -43,52 +34,62 @@ class Window(QMainWindow):
         """Initializer."""
         super().__init__(parent)
         self.setWindowTitle("Hw monitor")
-        self.move(600, 0)
+
+        monitor = QDesktopWidget().screenGeometry(0)
+        self.move(monitor.left(), monitor.top())
         self.setWindowOpacity(1)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setWindowFlags(Qt.FramelessWindowHint |
+                            Qt.WindowStaysOnTopHint |
+                            Qt.BypassWindowManagerHint |
+                            Qt.X11BypassWindowManagerHint |
+                            Qt.WindowTransparentForInput |
+                            Qt.WindowDoesNotAcceptFocus |
+                            Qt.BypassGraphicsProxyWidget)
 
-        self.central_widget = QWidget()
-        self.central_widget.setStyleSheet('background-color: rgba(0,0,0,{}%); color: white'.format(int(TRANSPARENCY * 100)))
-
+        self.central_widget = create_widget()
         self.setCentralWidget(self.central_widget)
 
         # position for move window
         self.drag_position = QPoint()
 
-
-class UserInterface:
-    def __init__(self, widget: QWidget):
-        self.main_form = create_form()
-        widget.setLayout(self.main_form)
-
-        self.notify_label = QLabel("")
-        self.notify_label.setFont(QFont('Monospace', 32))
-        self.notify_label.setAlignment(Qt.AlignCenter)
-        self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: red')
-        self.notify_label.setVisible(False)
-        self.main_form.addRow(self.notify_label)
+        self.main_form = QStackedLayout()
+        self.central_widget.setLayout(self.main_form)
 
         self.main_label = QLabel("")
         self.main_label.setFont(QFont('Monospace', 10))
         self.main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.main_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: white')
+        self.main_label.setStyleSheet('padding :0px; background-color: rgba(0,0,0,0%); color: white')
         self.main_label.setVisible(False)
-        self.main_form.addRow(self.main_label)
+        self.main_form.addWidget(self.main_label)
+
+        self.notify_label = QLabel("")
+        self.notify_label.setFont(QFont('Monospace', 10))
+        self.notify_label.setAlignment(Qt.AlignCenter)
+        self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: red')
+        self.notify_label.setVisible(False)
+        self.main_form.addWidget(self.notify_label)
 
     def set_main_label_text(self, text: str, visible: bool) -> None:
         self.main_label.setVisible(visible)
         self.main_label.setText(text)
+        #logging.debug(self.central_widget.geometry().size().height())
+        #logging.debug(self.main_form.totalMinimumSize().height())
+        #logging.debug(self.main_form.sizeConstraint().)
 
     def notify(self, text: str, visible: bool):
         self.notify_label.setVisible(visible)
         self.notify_label.setText(text)
-
+        if visible:
+            self.main_form.setCurrentIndex(1)
+            self.main_label.setVisible(False)
+        else:
+            self.main_form.setCurrentIndex(0)
+            self.main_label.setVisible(True)
 
 class Backend:
-    def __init__(self, window: Window, ui: UserInterface):
+    def __init__(self, window: Window):
         self.window = window
-        self.ui = ui
         self.reset_geometry()
 
         self.hard_monitor = hard_monitor.HardMonitor()
@@ -98,13 +99,13 @@ class Backend:
         self.read_log_timer.timeout.connect(self.print)
         self.read_log_timer.start(1000)
 
-        self.data_save_timer = QTimer()
-        self.data_save_timer.timeout.connect(self.save_data)
-        self.data_save_timer.start(6000)
+        #self.data_save_timer = QTimer()
+        #self.data_save_timer.timeout.connect(self.save_data)
+        #self.data_save_timer.start(6000)
 
-        self.window.centralWidget().mousePressEvent = self.on_press_event
-        self.window.centralWidget().mouseDoubleClickEvent = self.on_double_click_event
-        self.window.centralWidget().mouseMoveEvent = self.on_move_event
+        #self.window.centralWidget().mousePressEvent = self.on_press_event
+        #self.window.centralWidget().mouseDoubleClickEvent = self.on_double_click_event
+        #self.window.centralWidget().mouseMoveEvent = self.on_move_event
 
     def on_double_click_event(self, event: QMouseEvent):
         button = event.button()
@@ -128,17 +129,23 @@ class Backend:
             self.window.drag_position = event.globalPos()
             event.accept()
 
-    def save_data(self):
+    #def save_data(self):
         #data_saver = DataSaver(DATA_FILE_PATH)
         #data_saver.save(self.parser)
-        pass
+        #pass
 
     def print(self):
-        text = self.hard_monitor.get_info()
-        self.ui.set_main_label_text(text, True)
+        self.reset_geometry()
+        info = self.hard_monitor.get_info()
+        self.window.set_main_label_text(info.line, True)
+
+        if info.alarms:
+            self.window.notify(" ".join(info.alarms), True)
+        else:
+            self.window.notify("", False)
 
     def reset_geometry(self):
-        self.window.resize(400, 40)
+        self.window.resize(1, 1)
 
 
 if __name__ == "__main__":
@@ -148,7 +155,6 @@ if __name__ == "__main__":
     win = Window()
     win.show()
 
-    ui = UserInterface(win.central_widget)
-    back = Backend(win, ui)
+    back = Backend(win)
 
     sys.exit(app.exec_())

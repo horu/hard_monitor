@@ -6,7 +6,6 @@ import pathlib
 import typing
 import collections
 import sensors
-import subprocess
 
 
 def get_freq_list() -> typing:
@@ -75,18 +74,18 @@ def get_gpu_pow(sensors_list) -> str:
     return '{:02} W'.format(gpu_pow)
 
 
-def send_message(message: str):
-    subprocess.Popen(['notify-send', message])
-    return
+class HardMonitorInfo:
+    def __init__(self):
+        self.line: str = ""
+        self.alarms: typing.List[str] = []
 
-
-def show_temp(temp: float, limit: int, name: str):
-    round_temp = round(temp)
-    if round_temp < 0:
-        round_temp = 0
-    if round_temp > limit:
-        send_message('{} critical temp {}/{} °C'.format(name, round_temp, limit))
-    return '{:02} °C'.format(round_temp)
+    def show_temp(self, temp: float, limit: int, name: str) -> str:
+        round_temp = round(temp)
+        if round_temp < 0:
+            round_temp = 0
+        if round_temp > limit:
+            self.alarms.append('{} critical temp {}/{} °C'.format(name, round_temp, limit))
+        return '{:02} °C'.format(round_temp)
 
 
 class HardMonitor:
@@ -130,7 +129,7 @@ class HardMonitor:
         with file.open('w') as outfile:
             outfile.write(json_dump)
 
-    def get_info(self) -> str:
+    def get_info(self) -> HardMonitorInfo:
         cpu_freq_list = get_freq_list()
 
         cpu_counters_prev = self.cpu_counters
@@ -168,11 +167,13 @@ class HardMonitor:
         swap = psutil.swap_memory()
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
-        return '[{} {:04} ({}) Ghz {}] ({:03}) {:04} GB [{} MB/s {} MB/s] [{} MB/s {} MB/s {}] {} [{} {}]'.format(
+        info = HardMonitorInfo()
+        info.line = '[{} {:04} ({}) Ghz {}] ({:03}) {:04} GB [{} MB/s {} MB/s] [{} MB/s {} MB/s {}] {} [{} {}]'.format(
             convert_cpu_perc(cpu_diff), loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
-            show_temp(cpu_temp, 95, 'CPU'),
+            info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
             convert_net_speed(net_recv), convert_net_speed(net_send),
-            convert_disk_speed(disk_r), convert_disk_speed(disk_w), show_temp(nvme_temp, 65, 'NVME'),
-            bat_pow, gpu_pow, show_temp(gpu_temp, 95, 'GPU'),
+            convert_disk_speed(disk_r), convert_disk_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
+            bat_pow, gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
         )
+        return info

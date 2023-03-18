@@ -2,9 +2,15 @@ import argparse
 import hard_monitor
 import time
 import pathlib
+import subprocess
 
 
 TMP_FILE = pathlib.Path('/tmp/hard_monitor4234324234324.json')
+
+
+def send_message(message: str):
+    subprocess.Popen(['notify-send', message])
+    return
 
 
 def main():
@@ -20,7 +26,11 @@ def main():
         time.sleep(args.timeout)
 
     for i in range(0, args.count):
-        print(monitor.get_info())
+        info = monitor.get_info()
+        print(info.line)
+        for alarm in info.alarms:
+            send_message(alarm)
+
         if i + 1 < args.count:
             time.sleep(args.timeout)
     monitor.save_json(args.file)
