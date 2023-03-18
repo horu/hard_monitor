@@ -193,7 +193,7 @@ class HardMonitor():
         d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         info = HardMonitorInfo()
         info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] [{} {}] [{} MB/s {} MB/s {:4} ms] ' \
-                    '[{} MB/s {} MB/s {}] {} {}'.format(
+                    '[{} MB/s {} MB/s {}] {} [{}]'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
