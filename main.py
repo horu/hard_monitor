@@ -23,7 +23,7 @@ def main():
     monitor = hard_monitor.HardMonitor(args.period)
     if not monitor.load_json(args.file):
         monitor.update_counters()
-        time.sleep(args.timeout)
+        time.sleep(args.period)
 
     for i in range(0, args.count):
         info = monitor.get_info()
@@ -32,7 +32,7 @@ def main():
             send_message(alarm)
 
         if i + 1 < args.count:
-            time.sleep(args.timeout)
+            time.sleep(args.period)
     monitor.save_json(args.file)
 
 

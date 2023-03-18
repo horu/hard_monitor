@@ -8,7 +8,8 @@ import typing
 import collections
 import sensors
 import ping3
-from threading import Thread
+import datetime
+
 
 def get_freq_list() -> typing:
     time.sleep(0.05)
@@ -59,7 +60,19 @@ def get_bat(sensors_list) -> str:
     bat_pow = round(bat_cur * bat_volt)
 
     sensors_bat = psutil.sensors_battery()
-    return '{}{:2} W'.format(' ' if sensors_bat.power_plugged else '-', bat_pow)
+    power_plugged = ' ' if sensors_bat.power_plugged or not bat_pow else '-'
+
+    with open('/sys/class/power_supply/BAT1/charge_now', 'r') as file:
+        bat_ah = int(file.readline()) / 1000000
+        bat_wh = round(bat_volt * bat_ah, 1)
+
+    with open('/sys/class/power_supply/BAT1/charge_full', 'r') as file:
+        bat_full_ah = int(file.readline()) / 1000000
+    with open('/sys/class/power_supply/BAT1/voltage_min_design', 'r') as file:
+        bat_volt_design = int(file.readline()) / 1000000
+        bat_full_wh = round(bat_volt_design * bat_full_ah, 1)
+
+    return '[{}{:2} W {:4}/{:4} Wh]'.format(power_plugged, bat_pow, bat_wh, bat_full_wh)
 
 
 def get_gpu_pow(sensors_list) -> str:
@@ -81,7 +94,7 @@ class HardMonitorInfo:
             round_temp = 0
         if round_temp > limit:
             self.alarms.append('{} critical temp {}/{} °C'.format(name, round_temp, limit))
-        return '{:02} °C'.format(round_temp)
+        return '{:2} °C'.format(round_temp)
 
 
 class HardMonitor():
@@ -177,14 +190,17 @@ class HardMonitor():
         swap = psutil.swap_memory()
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
+        d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         info = HardMonitorInfo()
-        info.line = '[{:4} {:4} ({}) Ghz {}] ({:3}) {:4} GB [{} MB/s {} MB/s {:4} ms] ' \
-                    '[{} MB/s {} MB/s {}] {} [{} {}]'.format(
+        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] [{} {}] [{} MB/s {} MB/s {:4} ms] ' \
+                    '[{} MB/s {} MB/s {}] {} {}'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
+            gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
             convert_speed(net_recv), convert_speed(net_send), self.ping if self.ping else '****',
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
-            bat_pow, gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
+            bat_pow,
+            d_time,
         )
         return info
