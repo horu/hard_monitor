@@ -35,8 +35,6 @@ class Window(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("Hw monitor")
 
-        monitor = QDesktopWidget().screenGeometry(0)
-        self.move(monitor.left(), monitor.top())
         self.setWindowOpacity(1)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setWindowFlags(Qt.FramelessWindowHint |
@@ -59,7 +57,7 @@ class Window(QMainWindow):
         self.main_label = QLabel("")
         self.main_label.setFont(QFont('Monospace', 10))
         self.main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.main_label.setStyleSheet('padding :0px; background-color: rgba(0,0,0,0%); color: white')
+        self.main_label.setStyleSheet('padding :0px; background-color: rgba(0,0,0,0%); color: lightgreen')
         self.main_label.setVisible(False)
         self.main_form.addWidget(self.main_label)
 
@@ -70,8 +68,7 @@ class Window(QMainWindow):
         self.notify_label.setVisible(False)
         self.main_form.addWidget(self.notify_label)
 
-    def set_main_label_text(self, text: str, visible: bool) -> None:
-        self.main_label.setVisible(visible)
+    def set_main_label_text(self, text: str) -> None:
         self.main_label.setText(text)
         #logging.debug(self.central_widget.geometry().size().height())
         #logging.debug(self.main_form.totalMinimumSize().height())
@@ -137,7 +134,7 @@ class Backend:
     def print(self):
         self.reset_geometry()
         info = self.hard_monitor.get_info()
-        self.window.set_main_label_text(info.line, True)
+        self.window.set_main_label_text(info.line)
 
         if info.alarms:
             self.window.notify(" ".join(info.alarms), True)
@@ -145,6 +142,8 @@ class Backend:
             self.window.notify("", False)
 
     def reset_geometry(self):
+        monitor = QDesktopWidget().screenGeometry(0)
+        self.window.move(monitor.left(), monitor.top())
         self.window.resize(1, 1)
 
 

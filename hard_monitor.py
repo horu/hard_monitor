@@ -25,15 +25,6 @@ def get_freq_list() -> typing:
     return [round(f / 1000, 1) for f in freq_list]
 
 
-def convert_cpu_perc(value: float) -> str:
-    return '{:04}'.format(round(value, 1))
-
-    value = value * 100 / psutil.cpu_count()
-    if value < 100:
-        return '{:02} %'.format(round(value))
-    return '99 %'
-
-
 def convert_net_speed(speed: float) -> str:
     if speed < 0:
         speed = 0
@@ -41,19 +32,22 @@ def convert_net_speed(speed: float) -> str:
         speed = 99
 
     if speed < 10:
-        return '{:03}'.format(round(speed, 1))
+        return '{:3}'.format(round(speed, 1))
     return '·{}'.format(round(speed))
 
 
-def convert_disk_speed(speed: float) -> str:
+def convert_speed(speed: float) -> str:
     if speed < 0:
         speed = 0
     elif speed >= 1000:
         speed = 999
 
-    if speed < 100:
-        return '{:04}'.format(round(speed, 1))
-    return '·{}'.format(round(speed))
+    if speed < 10:
+        speed = round(speed, 1)
+    else:
+        speed = round(speed)
+
+    return '{:3}'.format(speed)
 
 
 def get_bat(sensors_list) -> str:
@@ -63,7 +57,7 @@ def get_bat(sensors_list) -> str:
     bat_pow = round(bat_cur * bat_volt)
 
     sensors_bat = psutil.sensors_battery()
-    return '{}{:02} W'.format(' ' if sensors_bat.power_plugged else '-', bat_pow)
+    return '{}{:2} W'.format(' ' if sensors_bat.power_plugged else '-', bat_pow)
 
 
 def get_gpu_pow(sensors_list) -> str:
@@ -71,7 +65,7 @@ def get_gpu_pow(sensors_list) -> str:
                                 if chip.prefix == b'amdgpu' and chip.path == b'/sys/class/hwmon/hwmon5'][0]]
     gpu_pow = round([f.get_value() for f in sensors_chip if f.label == 'PPT'][0])
 
-    return '{:02} W'.format(gpu_pow)
+    return '{:2} W'.format(gpu_pow)
 
 
 class HardMonitorInfo:
@@ -143,7 +137,7 @@ class HardMonitor:
 
         cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
         cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
-        cpu_diff = (cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff
+        cpu_diff = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
         net_recv = (self.net_counters.bytes_recv - net_counters_prev.bytes_recv) / time_diff / 1024 / 1024
         net_send = (self.net_counters.bytes_sent - net_counters_prev.bytes_sent) / time_diff / 1024 / 1024
         disk_r = (self.disk_counters.read_bytes - disk_counters_prev.read_bytes) / time_diff / 1024 / 1024
@@ -168,12 +162,12 @@ class HardMonitor:
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
         info = HardMonitorInfo()
-        info.line = '[{} {:04} ({}) Ghz {}] ({:03}) {:04} GB [{} MB/s {} MB/s] [{} MB/s {} MB/s {}] {} [{} {}]'.format(
-            convert_cpu_perc(cpu_diff), loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
+        info.line = '[{:4} {:4} ({}) Ghz {}] ({:3}) {:4} GB [{} MB/s {} MB/s] [{} MB/s {} MB/s {}] {} [{} {}]'.format(
+            cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
-            convert_net_speed(net_recv), convert_net_speed(net_send),
-            convert_disk_speed(disk_r), convert_disk_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
+            convert_speed(net_recv), convert_speed(net_send),
+            convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
             bat_pow, gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
         )
         return info
