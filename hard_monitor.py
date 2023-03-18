@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 import psutil
 import json
@@ -6,7 +7,8 @@ import pathlib
 import typing
 import collections
 import sensors
-
+import ping3
+from threading import Thread
 
 def get_freq_list() -> typing:
     time.sleep(0.05)
@@ -82,13 +84,27 @@ class HardMonitorInfo:
         return '{:02} °C'.format(round_temp)
 
 
-class HardMonitor:
-    def __init__(self, file: typing.Optional[pathlib.Path] = None):
+class HardMonitor():
+    def __init__(self, period_s: float):
         sensors.init()
         self.cpu_counters = None
         self.net_counters = None
         self.disk_counters = None
         self.counters_time = None
+        self.ping = None
+        self.period_s = period_s
+        self.ping_theead = threading.Thread(target=self.update_ping)
+        self.ping_theead.start()
+
+    def update_ping(self):
+        TIMEOUT = 5
+
+        while True:
+            try:
+                self.ping = round(ping3.ping('8.8.8.8', unit='ms', timeout=TIMEOUT))
+            except:
+                self.ping = None
+            time.sleep(self.period_s)
 
     def update_counters(self):
         self.cpu_counters = psutil.cpu_times()
@@ -162,11 +178,12 @@ class HardMonitor:
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
         info = HardMonitorInfo()
-        info.line = '[{:4} {:4} ({}) Ghz {}] ({:3}) {:4} GB [{} MB/s {} MB/s] [{} MB/s {} MB/s {}] {} [{} {}]'.format(
+        info.line = '[{:4} {:4} ({}) Ghz {}] ({:3}) {:4} GB [{} MB/s {} MB/s {:4} ms] ' \
+                    '[{} MB/s {} MB/s {}] {} [{} {}]'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
-            convert_speed(net_recv), convert_speed(net_send),
+            convert_speed(net_recv), convert_speed(net_send), self.ping if self.ping else '****',
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
             bat_pow, gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
         )

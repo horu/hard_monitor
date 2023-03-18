@@ -15,12 +15,12 @@ def send_message(message: str):
 
 def main():
     parser = argparse.ArgumentParser(prog='hard_monitor', description='Show hardware monitor')
-    parser.add_argument('-t', '--timeout', type=float, default=1.0, help='Timeout for collecting counters.')
+    parser.add_argument('-p', '--period', type=float, default=1.0, help='Timeout for collecting counters.')
     parser.add_argument('-c', '--count', type=int, default=1, help='Repeat output.')
     parser.add_argument('-f', '--file', type=pathlib.Path, default=TMP_FILE, help='File to save prev results.')
     args = parser.parse_args()
 
-    monitor = hard_monitor.HardMonitor()
+    monitor = hard_monitor.HardMonitor(args.period)
     if not monitor.load_json(args.file):
         monitor.update_counters()
         time.sleep(args.timeout)

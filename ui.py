@@ -1,3 +1,4 @@
+import argparse
 import logging
 import os
 import time
@@ -10,7 +11,6 @@ from PyQt5.QtGui import QFont, QMouseEvent
 import sys
 import hard_monitor
 
-LOG_LEVEL = os.environ.get('LOG_LEVEL', default='DEBUG')
 TRANSPARENCY = 0.5
 
 
@@ -84,17 +84,18 @@ class Window(QMainWindow):
             self.main_form.setCurrentIndex(0)
             self.main_label.setVisible(True)
 
+
 class Backend:
-    def __init__(self, window: Window):
+    def __init__(self, window: Window, period_s: float):
         self.window = window
         self.reset_geometry()
 
-        self.hard_monitor = hard_monitor.HardMonitor()
+        self.hard_monitor = hard_monitor.HardMonitor(period_s)
         self.hard_monitor.update_counters()
 
         self.read_log_timer = QTimer()
         self.read_log_timer.timeout.connect(self.print)
-        self.read_log_timer.start(1000)
+        self.read_log_timer.start(round(period_s * 1000))
 
         #self.data_save_timer = QTimer()
         #self.data_save_timer.timeout.connect(self.save_data)
@@ -148,12 +149,17 @@ class Backend:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(LOG_LEVEL))
+    parser = argparse.ArgumentParser(prog='hard_monitor', description='Show hardware monitor')
+    parser.add_argument('-p', '--period', type=float, default=2.0, help='Timeout for collecting counters.')
+    parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
+    args = parser.parse_args()
+
+    logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
 
     app = QApplication(sys.argv)
     win = Window()
     win.show()
 
-    back = Backend(win)
+    back = Backend(win, args.period)
 
     sys.exit(app.exec_())
