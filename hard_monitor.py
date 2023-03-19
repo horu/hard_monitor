@@ -84,30 +84,20 @@ def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[s
     return None
 
 
-def get_invalid_mark(size: int) -> str:
-    return '*' * size
-
-
-def print_invalid_maybe(value: typing.Optional, size: int) -> str:
-    if value is None:
-        return get_invalid_mark(size)
-    return value
-
-
 class Battery:
-    def __init__(self):
+    BAT_PATH = pathlib.Path('/sys/class/power_supply/BAT1')
 
-        bat_path = pathlib.Path('/sys/class/power_supply/BAT1')
+    def __init__(self):
         try:
-            with (bat_path / 'voltage_now').open('r') as file:
+            with (Battery.BAT_PATH / 'voltage_now').open('r') as file:
                 self.voltage_now_v = int(file.readline()) / 1000000
-            with (bat_path / 'voltage_min_design').open('r') as file:
+            with (Battery.BAT_PATH / 'voltage_min_design').open('r') as file:
                 self.voltage_min_design_v = int(file.readline()) / 1000000
-            with (bat_path / 'charge_now').open('r') as file:
+            with (Battery.BAT_PATH / 'charge_now').open('r') as file:
                 self.charge_now_ah = int(file.readline()) / 1000000
-            with (bat_path / 'current_now').open('r') as file:
+            with (Battery.BAT_PATH / 'current_now').open('r') as file:
                 self.current_now_a = int(file.readline()) / 1000000
-            with (bat_path / 'status').open('r') as file:
+            with (Battery.BAT_PATH / 'status').open('r') as file:
                 self.charge_status = False if 'Discharging' in file.readline() else True
         except:
             self.voltage_now_v = 0
@@ -124,6 +114,8 @@ class Battery:
 
 
 class Cpu:
+    TEMP_SENSOR_NAME = 'k10temp'
+
     def __init__(self):
         self.cpu_counters = psutil.cpu_times()
         self.counters_time = time.time()
@@ -155,7 +147,7 @@ class Cpu:
 
         sensors_temp = psutil.sensors_temperatures()
         try:
-            self.temp_c = [t.current for t in sensors_temp['k10temp'] if t.label == 'Tctl'][0]
+            self.temp_c = max(t.current for t in sensors_temp[Cpu.TEMP_SENSOR_NAME])
         except:
             self.temp_c = 0
 
@@ -187,6 +179,9 @@ class Cpu:
 
 
 class Gpu:
+    GPU_DEVICE_ID = '0x7340'
+    HWMON_PATH = pathlib.Path('/sys/class/hwmon/')
+
     def __init__(self):
         try:
             hwmon_path = self._find_hwmon()
@@ -208,12 +203,11 @@ class Gpu:
         self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
     def _find_hwmon(self) -> typing.Optional[pathlib.Path]:
-        hwmon_dir = pathlib.Path('/sys/class/hwmon/')
-        for hwmon in hwmon_dir.iterdir():
+        for hwmon in Gpu.HWMON_PATH.iterdir():
             hwmon_device = hwmon / 'device' / 'device'
             if hwmon_device.exists() and hwmon_device.is_file():
                 with hwmon_device.open('r') as file:
-                    if '0x7340' in file.readline():
+                    if Gpu.GPU_DEVICE_ID in file.readline():
                         return hwmon
         return None
 
@@ -256,11 +250,11 @@ class Network:
         self.wlan_bitrate_mbitps = None
 
     def _ping_loop(self):
-        TIMEOUT = 5
+        timeout = 5
 
         while not self.stopping.is_set():
             try:
-                self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=TIMEOUT))
+                self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=timeout))
             except:
                 self.ping_ms = None
             time.sleep(self.period_s)
@@ -297,7 +291,6 @@ class Network:
                 return True
         return False
 
-
     def stop(self):
         self.stopping.set()
 
@@ -311,6 +304,8 @@ class Network:
 
 
 class Disk:
+    TEMP_SENSOR_NAME = 'nvme'
+
     def __init__(self):
         self.disk_counters = psutil.disk_io_counters()
         self.counters_time = time.time()
@@ -338,7 +333,7 @@ class Disk:
 
         sensors_temp = psutil.sensors_temperatures()
         try:
-            self.temp_c = max([t.current for t in sensors_temp['nvme']])
+            self.temp_c = max(t.current for t in sensors_temp[Disk.TEMP_SENSOR_NAME])
         except:
             self.temp_c = 0
 
