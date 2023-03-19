@@ -93,6 +93,10 @@ class GpuInfo:
             self.temp2_input_c = int(file.readline()) / 1000
         with (hwmon_path / 'temp2_crit').open('r') as file:
             self.temp2_crit_c = int(file.readline()) / 1000 - 5
+        # with (hwmon_path / 'freq1_input').open('r') as file:
+        #     self.freq1_input_ghz = int(file.readline()) / 1000000000
+        # with (hwmon_path / 'freq2_input').open('r') as file:
+        #     self.freq2_input_ghz = int(file.readline()) / 1000000000
 
         self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
@@ -107,7 +111,13 @@ class GpuInfo:
         return None
 
     def __str__(self):
-        return '[{:2} W {:2} °C]'.format(round(self.power1_average_w), round(self.temp2_input_c))
+        return '[{:2} W {:2} °C]'.format(
+        # return '[({:3} {:3}) Ghz {:2} W {:2} °C]'.format(
+            # round(self.freq1_input_ghz, 1),
+            # round(self.freq2_input_ghz, 1),
+            round(self.power1_average_w),
+            round(self.temp2_input_c),
+        )
 
 
 class HardMonitorInfo:

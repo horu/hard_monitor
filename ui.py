@@ -4,6 +4,7 @@ import os
 import pathlib
 import signal
 import time
+import typing
 
 from PyQt5.QtCore import QTimer, QDateTime, QPoint, QRect
 from PyQt5.QtCore import Qt
@@ -54,19 +55,20 @@ class Window(QMainWindow):
         self.drag_position = QPoint()
 
         self.main_form = QStackedLayout()
+        self.main_form.setStackingMode(QStackedLayout.StackingMode.StackAll)
         self.central_widget.setLayout(self.main_form)
 
         self.main_label = QLabel("")
         self.main_label.setFont(QFont('Monospace', 10))
         self.main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.main_label.setStyleSheet('padding :0px; background-color: rgba(0,0,0,0%); color: lightgreen')
-        self.main_label.setVisible(False)
+        self.main_label.setVisible(True)
         self.main_form.addWidget(self.main_label)
 
         self.notify_label = QLabel("")
         self.notify_label.setFont(QFont('Monospace', 10))
         self.notify_label.setAlignment(Qt.AlignCenter)
-        self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: red')
+        self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: rgb(255,0,0)')
         self.notify_label.setVisible(False)
         self.main_form.addWidget(self.notify_label)
 
@@ -76,15 +78,14 @@ class Window(QMainWindow):
         #logging.debug(self.main_form.totalMinimumSize().height())
         #logging.debug(self.main_form.sizeConstraint().)
 
-    def notify(self, text: str, visible: bool):
-        self.notify_label.setVisible(visible)
-        self.notify_label.setText(text)
-        if visible:
-            self.main_form.setCurrentIndex(1)
-            self.main_label.setVisible(False)
+    def notify(self, text: typing.Optional[str]):
+        if text:
+            self.notify_label.setFont(QFont('Monospace', 36))
         else:
-            self.main_form.setCurrentIndex(0)
-            self.main_label.setVisible(True)
+            text = ''
+            self.notify_label.setFont(QFont('Monospace', 10))
+        self.notify_label.setVisible(True if text else False)
+        self.notify_label.setText(text)
 
 
 class Backend:
@@ -95,13 +96,13 @@ class Backend:
         self.hard_monitor = hard_monitor.HardMonitor(period_s)
         self.hard_monitor.update_counters()
 
-        self.read_log_timer = QTimer()
-        self.read_log_timer.timeout.connect(self.print)
-        self.read_log_timer.start(round(period_s * 1000))
+        self.print_timer = QTimer()
+        self.print_timer.timeout.connect(self.print)
+        self.print_timer.start(round(period_s * 1000))
 
-        #self.data_save_timer = QTimer()
-        #self.data_save_timer.timeout.connect(self.save_data)
-        #self.data_save_timer.start(6000)
+        self.test_notify_timer = QTimer()
+        self.test_notify_timer.timeout.connect(self.test_notify)
+        self.test_notify_timer.start(4500)
 
         #self.window.centralWidget().mousePressEvent = self.on_press_event
         #self.window.centralWidget().mouseDoubleClickEvent = self.on_double_click_event
@@ -129,20 +130,19 @@ class Backend:
             self.window.drag_position = event.globalPos()
             event.accept()
 
-    #def save_data(self):
-        #data_saver = DataSaver(DATA_FILE_PATH)
-        #data_saver.save(self.parser)
-        #pass
+    def test_notify(self):
+        self.window.notify('Test Alarm')
+        self.test_notify_timer.stop()
 
     def print(self):
-        self.reset_geometry()
         info = self.hard_monitor.get_info()
         self.window.set_main_label_text(info.line)
 
         if info.alarms:
-            self.window.notify(" ".join(info.alarms), True)
+            self.window.notify(' '.join(info.alarms))
         else:
-            self.window.notify("", False)
+            self.window.notify(None)
+        self.reset_geometry()
 
     def reset_geometry(self):
         monitor = QDesktopWidget().screenGeometry(0)
