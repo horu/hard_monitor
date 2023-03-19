@@ -405,16 +405,7 @@ class HardMonitorInfo:
         self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
 
     def __str__(self):
-        return '{} {} {} {} {} {} {} {}'.format(
-            self.cpu,
-            self.memory,
-            self.gpu,
-            self.network,
-            self.disk,
-            self.battery,
-            self.common,
-            self.top_process,
-        )
+        return ' '.join(str(value) for attr, value in self.__dict__.items() if attr != 'alarms')
 
 
 class HardMonitor:
