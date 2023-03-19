@@ -25,7 +25,6 @@ class Wlan:
         self.iface = iface
         self.sockfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.fmt = "ibbH"
-        self.idx = 0
 
     def iw_get_bitrate(self) -> typing.Optional[int]:
         try:
@@ -38,7 +37,7 @@ class Wlan:
     def _parse_data(self, fmt, data):
         """ Unpacks raw C data. """
         size = struct.calcsize(fmt)
-        idx = self.idx
+        idx = 0
 
         datastr = data[idx:idx + size]
         self.idx = idx+size
@@ -228,6 +227,17 @@ class Gpu:
         )
 
 
+class Memory:
+    def __init__(self):
+        memory = psutil.virtual_memory()
+        self.used_gb = memory.used / 1024 / 1024 / 1024
+        swap = psutil.swap_memory()
+        self.swap_gb = swap.used / 1024 / 1024 / 1024
+
+    def __str__(self):
+        return '[{:3} {:4} GB]'.format(round(self.swap_gb, 1), round(self.used_gb, 1))
+
+
 class Network:
     def __init__(self, period_s: float):
         self.net_counters = psutil.net_io_counters()
@@ -241,6 +251,8 @@ class Network:
 
         self.recv_mbps = 0
         self.send_mbps = 0
+
+        self.wlan = None
         self.wlan_bitrate_mbitps = None
 
     def _ping_loop(self):
@@ -265,15 +277,26 @@ class Network:
         self.recv_mbps = (self.net_counters.bytes_recv - net_counters_prev.bytes_recv) / time_diff / 1024 / 1024
         self.send_mbps = (self.net_counters.bytes_sent - net_counters_prev.bytes_sent) / time_diff / 1024 / 1024
 
-        # wlan bitrate
+        self._calculate_wlan_bitrate()
+
+    def _calculate_wlan_bitrate(self):
+        if self._calculate_wlan_bitrate_for_iface():
+            return
+
         for iface in netifaces.interfaces():
-            wlan = Wlan(iface)
-            bitrate = wlan.iw_get_bitrate()
+            self.wlan = Wlan(iface)
+            if self._calculate_wlan_bitrate_for_iface():
+                return
+        self.wlan_bitrate_mbitps = None
+
+    def _calculate_wlan_bitrate_for_iface(self) -> bool:
+        if self.wlan:
+            bitrate = self.wlan.iw_get_bitrate()
             if bitrate:
                 self.wlan_bitrate_mbitps = bitrate / 1000000
-                break
-        else:
-            self.wlan_bitrate_mbitps = None
+                return True
+        return False
+
 
     def stop(self):
         self.stopping.set()
@@ -349,23 +372,25 @@ class Common:
 class HardMonitorInfo:
     def __init__(self, network_: Network, disk: Disk, cpu: Cpu):
         self.cpu = cpu
+        self.memory = Memory()
         self.gpu = Gpu()
         self.network = network_
         self.disk = disk
         self.battery = Battery()
         self.common = Common()
 
-        self.line: str = ""
         self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
 
-    def show_temp(self, temp: float, limit: int, name: str) -> str:
-        round_temp = round(temp)
-        if round_temp < 0:
-            round_temp = 0
-        alarm = create_temp_alarm(name, round_temp, limit)
-        if alarm:
-            self.alarms.append(alarm)
-        return '{:2} °C'.format(round_temp)
+    def __str__(self):
+        return '{} {} {} {} {} {} {}'.format(
+            self.cpu,
+            self.memory,
+            self.gpu,
+            self.network,
+            self.disk,
+            self.battery,
+            self.common,
+        )
 
 
 class HardMonitor:
@@ -419,19 +444,5 @@ class HardMonitor:
     def get_info(self) -> HardMonitorInfo:
         self.update_counters()
 
-        memory = psutil.virtual_memory()
-        used_memory = round(memory.used / 1024 / 1024 / 1024, 1)
-        swap = psutil.swap_memory()
-        used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
-
         info = HardMonitorInfo(self.network, self.disk, self.cpu)
-        info.line = '{} [{:3} {:4} GB] {} {} {} {} {}'.format(
-            info.cpu,
-            used_swap, used_memory,
-            info.gpu,
-            info.network,
-            info.disk,
-            info.battery,
-            info.common,
-        )
         return info

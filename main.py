@@ -27,7 +27,7 @@ def main():
 
     for i in range(0, args.count):
         info = monitor.get_info()
-        print(info.line)
+        print(info)
         for alarm in info.alarms:
             send_message(alarm)
 

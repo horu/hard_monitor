@@ -136,7 +136,7 @@ class Backend:
 
     def print(self):
         info = self.hard_monitor.get_info()
-        self.window.set_main_label_text(info.line)
+        self.window.set_main_label_text(str(info))
 
         if info.alarms:
             self.window.notify(' '.join(info.alarms))
