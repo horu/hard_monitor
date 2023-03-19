@@ -352,6 +352,7 @@ class Common:
         self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         self.keyboard_layout = '**'
         self.process_info = ('', 0)  # name, cpu_percent
+        self.process_list_size = 0
 
         try:
             output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
@@ -362,21 +363,23 @@ class Common:
         except:
             pass
 
-        proc_list = [proc.info for proc in psutil.process_iter(['name', 'cpu_percent'])]
+        proc_list = [proc.info for proc in psutil.process_iter(['name', 'cpu_percent']) if proc.info['cpu_percent'] > 0]
+        self.process_list_size = len(proc_list)
         proc_dict = {}
         for proc in proc_list:
             proc_dict.setdefault(proc['name'], 0)
             proc_dict[proc['name']] += proc['cpu_percent']
         proc_info_list = sorted(proc_dict.items(), key=lambda p: p[1], reverse=True)
         if proc_info_list:
-            self.process = proc_info_list[0]
+            self.process_info = proc_info_list[0]
 
     def __str__(self):
-        return '[{} {} ({:4}) {:10}]'.format(
+        return '[{} {} ({:4}) {:10} {:3}]'.format(
             self.date_time,
             self.keyboard_layout,
-            round(self.process[1] / 100, 1),
-            self.process[0][:10],
+            round(self.process_info[1] / 100, 1),
+            self.process_info[0][:10],
+            self.process_list_size,
         )
 
 
