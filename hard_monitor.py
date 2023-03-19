@@ -380,10 +380,10 @@ class TopProcess:
         for proc in proc_list:
             proc_dict.setdefault(proc['name'], 0)
             proc_dict[proc['name']] += proc['cpu_percent']
-        proc_info_list = sorted(proc_dict.items(), key=lambda p: p[1], reverse=True)
-        if proc_info_list:
-            self.name = proc_info_list[0][0]
-            self.loadavg = proc_info_list[0][1] / 100
+            
+        proc_info_top = max(proc_dict.items(), key=lambda p: p[1], default=('', 0))
+        self.name = proc_info_top[0]
+        self.loadavg = proc_info_top[1] / 100
 
     def __str__(self):
         return '[{} {:10} {:3}]'.format(
