@@ -132,7 +132,7 @@ class Cpu:
         self.loadavg_1m = 0
         self.freq_list_ghz = []
         self.temp_c = 0
-        self.temp_crit_c = 95
+        self.temp_crit_c = 90
 
         self.alarm = None
 
@@ -195,7 +195,7 @@ class Gpu:
             with (hwmon_path / 'temp2_input').open('r') as file:
                 self.temp2_input_c = int(file.readline()) / 1000
             with (hwmon_path / 'temp2_crit').open('r') as file:
-                self.temp2_crit_c = int(file.readline()) / 1000 - 5
+                self.temp2_crit_c = int(file.readline()) / 1000 - 10
             # with (hwmon_path / 'freq1_input').open('r') as file:
             #     self.freq1_input_ghz = int(file.readline()) / 1000000000
             # with (hwmon_path / 'freq2_input').open('r') as file:
@@ -203,7 +203,7 @@ class Gpu:
         except:
             self.power1_average_w = 0
             self.temp2_input_c = 0
-            self.temp2_crit_c = 95
+            self.temp2_crit_c = 90
 
         self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
