@@ -61,18 +61,25 @@ def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[s
 
 class BatteryInfo:
     def __init__(self):
-        bat_path = pathlib.Path('/sys/class/power_supply/BAT1')
 
-        with (bat_path / 'voltage_now').open('r') as file:
-            self.voltage_now_v = int(file.readline()) / 1000000
-        with (bat_path / 'voltage_min_design').open('r') as file:
-            self.voltage_min_design_v = int(file.readline()) / 1000000
-        with (bat_path / 'charge_now').open('r') as file:
-            self.charge_now_ah = int(file.readline()) / 1000000
-        with (bat_path / 'current_now').open('r') as file:
-            self.current_now_a = int(file.readline()) / 1000000
-        with (bat_path / 'status').open('r') as file:
-            self.charge_status = False if 'Discharging' in file.readline() else True
+        bat_path = pathlib.Path('/sys/class/power_supply/BAT1')
+        try:
+            with (bat_path / 'voltage_now').open('r') as file:
+                self.voltage_now_v = int(file.readline()) / 1000000
+            with (bat_path / 'voltage_min_design').open('r') as file:
+                self.voltage_min_design_v = int(file.readline()) / 1000000
+            with (bat_path / 'charge_now').open('r') as file:
+                self.charge_now_ah = int(file.readline()) / 1000000
+            with (bat_path / 'current_now').open('r') as file:
+                self.current_now_a = int(file.readline()) / 1000000
+            with (bat_path / 'status').open('r') as file:
+                self.charge_status = False if 'Discharging' in file.readline() else True
+        except:
+            self.voltage_now_v = 0
+            self.voltage_min_design_v = 0
+            self.charge_now_ah = 0
+            self.current_now_a = 0
+            self.charge_status = False
 
     def __str__(self):
         power_w = self.voltage_now_v * self.current_now_a
@@ -84,19 +91,21 @@ class BatteryInfo:
 class GpuInfo:
     def __init__(self):
         hwmon_path = self._find_hwmon()
-        if not hwmon_path:
-            pass
-
-        with (hwmon_path / 'power1_average').open('r') as file:
-            self.power1_average_w = int(file.readline()) / 1000000
-        with (hwmon_path / 'temp2_input').open('r') as file:
-            self.temp2_input_c = int(file.readline()) / 1000
-        with (hwmon_path / 'temp2_crit').open('r') as file:
-            self.temp2_crit_c = int(file.readline()) / 1000 - 5
-        # with (hwmon_path / 'freq1_input').open('r') as file:
-        #     self.freq1_input_ghz = int(file.readline()) / 1000000000
-        # with (hwmon_path / 'freq2_input').open('r') as file:
-        #     self.freq2_input_ghz = int(file.readline()) / 1000000000
+        try:
+            with (hwmon_path / 'power1_average').open('r') as file:
+                self.power1_average_w = int(file.readline()) / 1000000
+            with (hwmon_path / 'temp2_input').open('r') as file:
+                self.temp2_input_c = int(file.readline()) / 1000
+            with (hwmon_path / 'temp2_crit').open('r') as file:
+                self.temp2_crit_c = int(file.readline()) / 1000 - 5
+            # with (hwmon_path / 'freq1_input').open('r') as file:
+            #     self.freq1_input_ghz = int(file.readline()) / 1000000000
+            # with (hwmon_path / 'freq2_input').open('r') as file:
+            #     self.freq2_input_ghz = int(file.readline()) / 1000000000
+        except:
+            self.power1_average_w = 0
+            self.temp2_input_c = 0
+            self.temp2_crit_c = 100
 
         self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
