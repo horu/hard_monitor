@@ -246,6 +246,7 @@ class HardMonitorInfo:
         self.battery = Battery()
         self.gpu = Gpu()
         self.network = network_
+        self.d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
 
         self.line: str = ""
         self.alarms: typing.List[str] = []
@@ -340,7 +341,6 @@ class HardMonitor:
         swap = psutil.swap_memory()
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
-        d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         info = HardMonitorInfo(self.network)
         info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} [{} MB/s {} MB/s {}] {} [{}]'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
@@ -350,6 +350,6 @@ class HardMonitor:
             info.network,
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
             info.battery,
-            d_time,
+            info.d_time,
         )
         return info
