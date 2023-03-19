@@ -374,10 +374,10 @@ class Common:
             self.process_info = proc_info_list[0]
 
     def __str__(self):
-        return '[{} {} ({:4}) {:10} {:3}]'.format(
+        return '[{} {} ({}) {:10} {:3}]'.format(
             self.date_time,
             self.keyboard_layout,
-            round(self.process_info[1] / 100, 1),
+            convert_speed(self.process_info[1] / 100),
             self.process_info[0][:10],
             self.process_list_size,
         )
