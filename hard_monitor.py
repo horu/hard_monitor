@@ -70,7 +70,7 @@ def convert_speed(speed: float) -> str:
     elif speed >= 1000:
         speed = 999
 
-    if speed < 10:
+    if speed <= 9.9:
         speed = round(speed, 1)
     else:
         speed = round(speed)
