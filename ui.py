@@ -14,7 +14,7 @@ from PyQt5.QtGui import QFont, QMouseEvent
 import sys
 import hard_monitor
 
-TRANSPARENCY = 0.5
+TRANSPARENCY = 0.7
 
 
 def create_form() -> QFormLayout:

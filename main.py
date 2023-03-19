@@ -5,7 +5,7 @@ import pathlib
 import subprocess
 
 
-TMP_FILE = pathlib.Path('/tmp/hard_monitor4234324234324.json')
+TMP_FILE = pathlib.Path('/tmp/hard_monitor_default.json')
 
 
 def send_message(message: str):
@@ -35,6 +35,7 @@ def main():
             time.sleep(args.period)
     monitor.save_json(args.file)
     monitor.stop()
+    pass
 
 
 if __name__ == '__main__':

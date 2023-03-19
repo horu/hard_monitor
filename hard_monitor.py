@@ -351,6 +351,8 @@ class Common:
     def __init__(self):
         self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         self.keyboard_layout = '**'
+        self.process_info = ('', 0)  # name, cpu_percent
+
         try:
             output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
             if b'1' in output:
@@ -360,8 +362,22 @@ class Common:
         except:
             pass
 
+        proc_list = [proc.info for proc in psutil.process_iter(['name', 'cpu_percent'])]
+        proc_dict = {}
+        for proc in proc_list:
+            proc_dict.setdefault(proc['name'], 0)
+            proc_dict[proc['name']] += proc['cpu_percent']
+        proc_info_list = sorted(proc_dict.items(), key=lambda p: p[1], reverse=True)
+        if proc_info_list:
+            self.process = proc_info_list[0]
+
     def __str__(self):
-        return '[{} {}]'.format(self.date_time, self.keyboard_layout)
+        return '[{} {} ({:4}) {:10}]'.format(
+            self.date_time,
+            self.keyboard_layout,
+            round(self.process[1] / 100, 1),
+            self.process[0][:10],
+        )
 
 
 class HardMonitorInfo:
