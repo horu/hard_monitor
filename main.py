@@ -34,6 +34,7 @@ def main():
         if i + 1 < args.count:
             time.sleep(args.period)
     monitor.save_json(args.file)
+    monitor.stop()
 
 
 if __name__ == '__main__':

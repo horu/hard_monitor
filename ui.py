@@ -1,6 +1,8 @@
 import argparse
 import logging
 import os
+import pathlib
+import signal
 import time
 
 from PyQt5.QtCore import QTimer, QDateTime, QPoint, QRect
@@ -151,8 +153,22 @@ class Backend:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='hard_monitor', description='Show hardware monitor')
     parser.add_argument('-p', '--period', type=float, default=2.0, help='Timeout for collecting counters.')
+    parser.add_argument('-f', '--pidfile', type=pathlib.Path, default='/tmp/hard_monitor_ui_default',
+                        help='File to save pid.')
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
     args = parser.parse_args()
+
+    if args.pidfile:
+        try:
+            with args.pidfile.open('r') as file:
+                pid = int(file.readline())
+                logging.info('pid: {}'.format(pid))
+                os.kill(pid, signal.SIGKILL)
+        except:
+            pass
+
+        with args.pidfile.open('w') as file:
+            file.write(str(os.getpid()))
 
     logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
 

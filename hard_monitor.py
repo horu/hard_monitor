@@ -53,47 +53,81 @@ def convert_speed(speed: float) -> str:
     return '{:3}'.format(speed)
 
 
-def get_bat(sensors_list) -> str:
-    sensors_chip = [f for f in [chip for chip in sensors_list if chip.prefix == b'BAT1'][0]]
-    bat_cur = [f.get_value() for f in sensors_chip if f.label == 'curr1'][0]
-    bat_volt = [f.get_value() for f in sensors_chip if f.label == 'in0'][0]
-    bat_pow = round(bat_cur * bat_volt)
-
-    sensors_bat = psutil.sensors_battery()
-    power_plugged = ' ' if sensors_bat.power_plugged or not bat_pow else '-'
-
-    with open('/sys/class/power_supply/BAT1/charge_now', 'r') as file:
-        bat_ah = int(file.readline()) / 1000000
-        bat_wh = round(bat_volt * bat_ah, 1)
-
-    with open('/sys/class/power_supply/BAT1/charge_full', 'r') as file:
-        bat_full_ah = int(file.readline()) / 1000000
-    with open('/sys/class/power_supply/BAT1/voltage_min_design', 'r') as file:
-        bat_volt_design = int(file.readline()) / 1000000
-        bat_full_wh = round(bat_volt_design * bat_full_ah, 1)
-
-    return '[{}{:2} W {:4}/{:4} Wh]'.format(power_plugged, bat_pow, bat_wh, bat_full_wh)
+def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[str]:
+    if temp >= limit:
+        return '{} critical temp {}/{} °C'.format(name, temp, limit)
+    return None
 
 
-def get_gpu_pow(sensors_list) -> str:
-    sensors_chip = [f for f in [chip for chip in sensors_list
-                                if chip.prefix == b'amdgpu' and chip.path == b'/sys/class/hwmon/hwmon5'][0]]
-    gpu_pow = round([f.get_value() for f in sensors_chip if f.label == 'PPT'][0])
+class BatteryInfo:
+    def __init__(self):
+        bat_path = pathlib.Path('/sys/class/power_supply/BAT1')
 
-    return '{:2} W'.format(gpu_pow)
+        with (bat_path / 'voltage_now').open('r') as file:
+            self.voltage_now_v = int(file.readline()) / 1000000
+        with (bat_path / 'voltage_min_design').open('r') as file:
+            self.voltage_min_design_v = int(file.readline()) / 1000000
+        with (bat_path / 'charge_now').open('r') as file:
+            self.charge_now_ah = int(file.readline()) / 1000000
+        with (bat_path / 'current_now').open('r') as file:
+            self.current_now_a = int(file.readline()) / 1000000
+        with (bat_path / 'status').open('r') as file:
+            self.charge_status = False if 'Discharging' in file.readline() else True
+
+    def __str__(self):
+        power_w = self.voltage_now_v * self.current_now_a
+        capacity_wh = self.charge_now_ah * self.voltage_min_design_v
+
+        return '[{}{:2} W {:4} Wh]'.format('+' if self.charge_status else ' ', round(power_w), round(capacity_wh, 1))
+
+
+class GpuInfo:
+    def __init__(self):
+        hwmon_path = self._find_hwmon()
+        if not hwmon_path:
+            pass
+
+        with (hwmon_path / 'power1_average').open('r') as file:
+            self.power1_average_w = int(file.readline()) / 1000000
+        with (hwmon_path / 'temp2_input').open('r') as file:
+            self.temp2_input_c = int(file.readline()) / 1000
+        with (hwmon_path / 'temp2_crit').open('r') as file:
+            self.temp2_crit_c = int(file.readline()) / 1000 - 5
+
+        self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
+
+    def _find_hwmon(self) -> typing.Optional[pathlib.Path]:
+        hwmon_dir = pathlib.Path('/sys/class/hwmon/')
+        for hwmon in hwmon_dir.iterdir():
+            hwmon_device = hwmon / 'device' / 'device'
+            if hwmon_device.exists() and hwmon_device.is_file():
+                with hwmon_device.open('r') as file:
+                    if '0x7340' in file.readline():
+                        return hwmon
+        return None
+
+    def __str__(self):
+        return '[{:2} W {:2} °C]'.format(round(self.power1_average_w), round(self.temp2_input_c))
 
 
 class HardMonitorInfo:
     def __init__(self):
+        self.battery = BatteryInfo()
+        self.gpu = GpuInfo()
+
         self.line: str = ""
         self.alarms: typing.List[str] = []
+
+        if self.gpu.alarm:
+            self.alarms.append(self.gpu.alarm)
 
     def show_temp(self, temp: float, limit: int, name: str) -> str:
         round_temp = round(temp)
         if round_temp < 0:
             round_temp = 0
-        if round_temp > limit:
-            self.alarms.append('{} critical temp {}/{} °C'.format(name, round_temp, limit))
+        alarm = create_temp_alarm(name, round_temp, limit)
+        if alarm:
+            self.alarms.append(alarm)
         return '{:2} °C'.format(round_temp)
 
 
@@ -106,18 +140,22 @@ class HardMonitor():
         self.counters_time = None
         self.ping = None
         self.period_s = period_s
+        self.stopping = threading.Event()
         self.ping_theead = threading.Thread(target=self.update_ping)
         self.ping_theead.start()
 
     def update_ping(self):
         TIMEOUT = 5
 
-        while True:
+        while not self.stopping.is_set():
             try:
                 self.ping = round(ping3.ping('8.8.8.8', unit='ms', timeout=TIMEOUT))
             except:
                 self.ping = None
             time.sleep(self.period_s)
+
+    def stop(self):
+        self.stopping.set()
 
     def update_counters(self):
         self.cpu_counters = psutil.cpu_times()
@@ -176,14 +214,9 @@ class HardMonitor():
 
         loadavg = round(os.getloadavg()[0], 1)
 
-        sensors_list = [c for c in sensors.iter_detected_chips()]
-        bat_pow = get_bat(sensors_list)
-        gpu_pow = get_gpu_pow(sensors_list)
-
         sensors_temp = psutil.sensors_temperatures()
         cpu_temp = [t.current for t in sensors_temp['k10temp'] if t.label == 'Tctl'][0]
         nvme_temp = [t.current for t in sensors_temp['nvme'] if t.label == 'Sensor 1'][0]
-        gpu_temp = [t.current for t in sensors_temp['amdgpu'] if t.label == 'junction'][0]
 
         memory = psutil.virtual_memory()
         used_memory = round(memory.used / 1024 / 1024 / 1024, 1)
@@ -192,15 +225,15 @@ class HardMonitor():
 
         d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         info = HardMonitorInfo()
-        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] [{} {}] [{} MB/s {} MB/s {:4} ms] ' \
+        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} [{} MB/s {} MB/s {:4} ms] ' \
                     '[{} MB/s {} MB/s {}] {} [{}]'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
-            gpu_pow, info.show_temp(gpu_temp, 95, 'GPU'),
+            info.gpu,
             convert_speed(net_recv), convert_speed(net_send), self.ping if self.ping else '****',
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
-            bat_pow,
+            info.battery,
             d_time,
         )
         return info
