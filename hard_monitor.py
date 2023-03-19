@@ -14,6 +14,7 @@ import datetime
 import netifaces
 import socket
 import array
+import subprocess
 
 
 class Wlan:
@@ -241,12 +242,25 @@ class Network:
         )
 
 
+class Common:
+    def __init__(self):
+        self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
+        output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
+        if b'1' in output:
+            self.keyboard_layout = 'ru'
+        else:
+            self.keyboard_layout = 'en'
+
+    def __str__(self):
+        return '[{} {}]'.format(self.date_time, self.keyboard_layout)
+
+
 class HardMonitorInfo:
     def __init__(self, network_: Network):
         self.battery = Battery()
         self.gpu = Gpu()
         self.network = network_
-        self.d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
+        self.common = Common()
 
         self.line: str = ""
         self.alarms: typing.List[str] = []
@@ -342,7 +356,7 @@ class HardMonitor:
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
         info = HardMonitorInfo(self.network)
-        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} [{} MB/s {} MB/s {}] {} [{}]'.format(
+        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} [{} MB/s {} MB/s {}] {} {}'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
@@ -350,6 +364,6 @@ class HardMonitor:
             info.network,
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
             info.battery,
-            info.d_time,
+            info.common,
         )
         return info
