@@ -351,8 +351,6 @@ class Common:
     def __init__(self):
         self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
         self.keyboard_layout = '**'
-        self.process_info = ('', 0)  # name, cpu_percent
-        self.process_list_size = 0
 
         try:
             output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
@@ -362,6 +360,18 @@ class Common:
                 self.keyboard_layout = 'en'
         except:
             pass
+
+    def __str__(self):
+        return '[{} {}]'.format(
+            self.date_time,
+            self.keyboard_layout,
+        )
+
+
+class TopProcess:
+    def __init__(self):
+        self.process_info = ('', 0)  # name, cpu_percent
+        self.process_list_size = 0
 
         proc_list = [proc.info for proc in psutil.process_iter(['name', 'cpu_percent']) if proc.info['cpu_percent'] > 0]
         self.process_list_size = len(proc_list)
@@ -374,9 +384,7 @@ class Common:
             self.process_info = proc_info_list[0]
 
     def __str__(self):
-        return '[{} {} ({}) {:10} {:3}]'.format(
-            self.date_time,
-            self.keyboard_layout,
+        return '[{} {:10} {:3}]'.format(
             convert_speed(self.process_info[1] / 100),
             self.process_info[0][:10],
             self.process_list_size,
@@ -392,11 +400,12 @@ class HardMonitorInfo:
         self.disk = disk
         self.battery = Battery()
         self.common = Common()
+        self.top_process = TopProcess()
 
         self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
 
     def __str__(self):
-        return '{} {} {} {} {} {} {}'.format(
+        return '{} {} {} {} {} {} {} {}'.format(
             self.cpu,
             self.memory,
             self.gpu,
@@ -404,6 +413,7 @@ class HardMonitorInfo:
             self.disk,
             self.battery,
             self.common,
+            self.top_process,
         )
 
 
