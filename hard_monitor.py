@@ -188,8 +188,8 @@ class Cpu:
 
 class Gpu:
     def __init__(self):
-        hwmon_path = self._find_hwmon()
         try:
+            hwmon_path = self._find_hwmon()
             with (hwmon_path / 'power1_average').open('r') as file:
                 self.power1_average_w = int(file.readline()) / 1000000
             with (hwmon_path / 'temp2_input').open('r') as file:
