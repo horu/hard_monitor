@@ -1,4 +1,6 @@
+import fcntl
 import os
+import struct
 import threading
 import time
 import psutil
@@ -9,6 +11,57 @@ import collections
 import sensors
 import ping3
 import datetime
+import netifaces
+import socket
+import array
+
+
+class Wlan:
+    SIOCGIWRATE = 0x8B21  # get default bit rate (bps)
+    IFNAMSIZE = 16
+
+    def __init__(self, iface: str):
+        self.iface = iface
+        self.sockfd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.fmt = "ibbH"
+        self.idx = 0
+
+    def iw_get_bitrate(self) -> typing.Optional[int]:
+        try:
+            status, result = self._iw_get_ext(self.iface, Wlan.SIOCGIWRATE)
+            return self._parse_data(self.fmt, result)[0]
+        except:
+            pass
+        return None
+
+    def _parse_data(self, fmt, data):
+        """ Unpacks raw C data. """
+        size = struct.calcsize(fmt)
+        idx = self.idx
+
+        datastr = data[idx:idx + size]
+        self.idx = idx+size
+        value = struct.unpack(fmt, datastr)
+
+        # take care of a tuple like (int, )
+        if len(value) == 1:
+            return value[0]
+        else:
+            return value
+
+    def _iw_get_ext(self, ifname, request, data=None):
+        """ Read information from ifname. """
+        buff = Wlan.IFNAMSIZE-len(ifname)
+        ifreq = array.array('b', ifname.encode('utf-8') + b'\0'*buff)
+        # put some additional data behind the interface name
+        if data is not None:
+            ifreq.extend(data)
+        else:
+            # extend to 32 bytes for ioctl payload
+            ifreq.extend(b'\0'*16)
+
+        result = fcntl.ioctl(self.sockfd.fileno(), request, ifreq)
+        return result, ifreq[Wlan.IFNAMSIZE:]
 
 
 def get_freq_list() -> typing:
@@ -59,7 +112,7 @@ def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[s
     return None
 
 
-class BatteryInfo:
+class Battery:
     def __init__(self):
 
         bat_path = pathlib.Path('/sys/class/power_supply/BAT1')
@@ -88,7 +141,7 @@ class BatteryInfo:
         return '[{}{:2} W {:4} Wh]'.format('+' if self.charge_status else ' ', round(power_w), round(capacity_wh, 1))
 
 
-class GpuInfo:
+class Gpu:
     def __init__(self):
         hwmon_path = self._find_hwmon()
         try:
@@ -129,10 +182,70 @@ class GpuInfo:
         )
 
 
+class Network:
+    def __init__(self, period_s: float):
+        self.net_counters = psutil.net_io_counters()
+        self.counters_time = time.time()
+
+        self.ping_ms = None
+        self.period_s = period_s
+        self.stopping = threading.Event()
+        self.ping_theead = threading.Thread(target=self._ping_loop)
+        self.ping_theead.start()
+
+        self.recv_mbps = 0
+        self.send_mbps = 0
+        self.wlan_bitrate_mbitps = None
+
+    def _ping_loop(self):
+        TIMEOUT = 5
+
+        while not self.stopping.is_set():
+            try:
+                self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=TIMEOUT))
+            except:
+                self.ping_ms = None
+            time.sleep(self.period_s)
+
+    def calculate(self):
+        net_counters_prev = self.net_counters
+        counters_time_prev = self.counters_time
+
+        self.net_counters = psutil.net_io_counters()
+        self.counters_time = time.time()
+
+        time_diff = self.counters_time - counters_time_prev
+
+        self.recv_mbps = (self.net_counters.bytes_recv - net_counters_prev.bytes_recv) / time_diff / 1024 / 1024
+        self.send_mbps = (self.net_counters.bytes_sent - net_counters_prev.bytes_sent) / time_diff / 1024 / 1024
+
+        # wlan bitrate
+        for iface in netifaces.interfaces():
+            wlan = Wlan(iface)
+            bitrate = wlan.iw_get_bitrate()
+            if bitrate:
+                self.wlan_bitrate_mbitps = bitrate / 1000000
+                break
+        else:
+            self.wlan_bitrate_mbitps = None
+
+    def stop(self):
+        self.stopping.set()
+
+    def __str__(self):
+        return '[{} MB/s {} MB/s {:4} ms {:3} MBit]'.format(
+            convert_speed(self.recv_mbps),
+            convert_speed(self.send_mbps),
+            self.ping_ms if self.ping_ms else '****',
+            round(self.wlan_bitrate_mbitps) if self.wlan_bitrate_mbitps else '***'
+        )
+
+
 class HardMonitorInfo:
-    def __init__(self):
-        self.battery = BatteryInfo()
-        self.gpu = GpuInfo()
+    def __init__(self, network_: Network):
+        self.battery = Battery()
+        self.gpu = Gpu()
+        self.network = network_
 
         self.line: str = ""
         self.alarms: typing.List[str] = []
@@ -150,37 +263,23 @@ class HardMonitorInfo:
         return '{:2} °C'.format(round_temp)
 
 
-class HardMonitor():
+class HardMonitor:
     def __init__(self, period_s: float):
         sensors.init()
         self.cpu_counters = None
-        self.net_counters = None
         self.disk_counters = None
         self.counters_time = None
-        self.ping = None
-        self.period_s = period_s
-        self.stopping = threading.Event()
-        self.ping_theead = threading.Thread(target=self.update_ping)
-        self.ping_theead.start()
 
-    def update_ping(self):
-        TIMEOUT = 5
-
-        while not self.stopping.is_set():
-            try:
-                self.ping = round(ping3.ping('8.8.8.8', unit='ms', timeout=TIMEOUT))
-            except:
-                self.ping = None
-            time.sleep(self.period_s)
+        self.network = Network(period_s)
 
     def stop(self):
-        self.stopping.set()
+        self.network.stop()
 
     def update_counters(self):
         self.cpu_counters = psutil.cpu_times()
-        self.net_counters = psutil.net_io_counters()
         self.disk_counters = psutil.disk_io_counters()
         self.counters_time = time.time()
+        self.network.calculate()
 
     def load_json(self, file: pathlib.Path) -> bool:
         try:
@@ -188,11 +287,13 @@ class HardMonitor():
                 dump = json.load(output)
             CpuCounters = collections.namedtuple('CpuCounters', dump['cpu_counters'])
             self.cpu_counters = CpuCounters(**dump['cpu_counters'])
-            NetCounters = collections.namedtuple('NetCounters', dump['net_counters'])
-            self.net_counters = NetCounters(**dump['net_counters'])
             DiskCounters = collections.namedtuple('DiskCounters', dump['disk_counters'])
             self.disk_counters = DiskCounters(**dump['disk_counters'])
             self.counters_time = dump['counters_time']
+
+            NetCounters = collections.namedtuple('NetCounters', dump['net_counters'])
+            self.network.net_counters = NetCounters(**dump['net_counters'])
+            self.network.counters_time = self.counters_time
         except Exception:
             return False
         return True
@@ -201,8 +302,8 @@ class HardMonitor():
         dump = {
             'counters_time': self.counters_time,
             'cpu_counters': self.cpu_counters._asdict(),
-            'net_counters': self.net_counters._asdict(),
             'disk_counters': self.disk_counters._asdict(),
+            'net_counters': self.network.net_counters._asdict(),
         }
         json_dump = json.dumps(dump, sort_keys=True, indent=4)
 
@@ -213,7 +314,6 @@ class HardMonitor():
         cpu_freq_list = get_freq_list()
 
         cpu_counters_prev = self.cpu_counters
-        net_counters_prev = self.net_counters
         disk_counters_prev = self.disk_counters
         counters_time_prev = self.counters_time
 
@@ -224,8 +324,6 @@ class HardMonitor():
         cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
         cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
         cpu_diff = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
-        net_recv = (self.net_counters.bytes_recv - net_counters_prev.bytes_recv) / time_diff / 1024 / 1024
-        net_send = (self.net_counters.bytes_sent - net_counters_prev.bytes_sent) / time_diff / 1024 / 1024
         disk_r = (self.disk_counters.read_bytes - disk_counters_prev.read_bytes) / time_diff / 1024 / 1024
         disk_w = (self.disk_counters.write_bytes - disk_counters_prev.write_bytes) / time_diff / 1024 / 1024
         #disk_r_t = disk_counters.read_time - self.disk_counters.read_time
@@ -243,14 +341,13 @@ class HardMonitor():
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
         d_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
-        info = HardMonitorInfo()
-        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} [{} MB/s {} MB/s {:4} ms] ' \
-                    '[{} MB/s {} MB/s {}] {} [{}]'.format(
+        info = HardMonitorInfo(self.network)
+        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} [{} MB/s {} MB/s {}] {} [{}]'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
             info.gpu,
-            convert_speed(net_recv), convert_speed(net_send), self.ping if self.ping else '****',
+            info.network,
             convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
             info.battery,
             d_time,
