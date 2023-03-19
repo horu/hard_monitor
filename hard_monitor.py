@@ -80,7 +80,7 @@ def convert_speed(speed: float) -> str:
 
 def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[str]:
     if temp >= limit:
-        return '{} critical temp {}/{} °C'.format(name, temp, limit)
+        return '{} critical temp {:2}/{:2} °C'.format(name, round(temp), round(limit))
     return None
 
 
@@ -115,6 +115,7 @@ class Battery:
 
 class Cpu:
     TEMP_SENSOR_NAME = 'k10temp'
+    TEMP_CRIT_C = 90
 
     def __init__(self):
         self.cpu_counters = psutil.cpu_times()
@@ -124,7 +125,6 @@ class Cpu:
         self.loadavg_1m = 0
         self.freq_list_ghz = []
         self.temp_c = 0
-        self.temp_crit_c = 90
 
         self.alarm = None
 
@@ -151,7 +151,7 @@ class Cpu:
         except:
             self.temp_c = 0
 
-        self.alarm = create_temp_alarm('CPU', self.temp_c, self.temp_crit_c)
+        self.alarm = create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
 
     def _get_freq_list(self) -> typing.List[float]:
         time.sleep(0.05)
@@ -305,6 +305,7 @@ class Network:
 
 class Disk:
     TEMP_SENSOR_NAME = 'nvme'
+    TEMP_CRIT_C = 65
 
     def __init__(self):
         self.disk_counters = psutil.disk_io_counters()
@@ -313,7 +314,6 @@ class Disk:
         self.read_mbps = 0
         self.write_mbps = 0
         self.temp_c = 0
-        self.temp_crit_c = 65
 
         self.alarm = None
 
@@ -337,7 +337,7 @@ class Disk:
         except:
             self.temp_c = 0
 
-        self.alarm = create_temp_alarm('NVME', self.temp_c, self.temp_crit_c)
+        self.alarm = create_temp_alarm('NVME', self.temp_c, Disk.TEMP_CRIT_C)
 
     def __str__(self):
         return '[{} MB/s {} MB/s {:2} °C]'.format(
@@ -365,11 +365,11 @@ class Common:
 
 
 class HardMonitorInfo:
-    def __init__(self, network_: Network, disk: Disk, cpu: Cpu):
+    def __init__(self, network: Network, disk: Disk, cpu: Cpu):
         self.cpu = cpu
         self.memory = Memory()
         self.gpu = Gpu()
-        self.network = network_
+        self.network = network
         self.disk = disk
         self.battery = Battery()
         self.common = Common()
