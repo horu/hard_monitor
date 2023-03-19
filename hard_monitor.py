@@ -370,7 +370,8 @@ class Common:
 
 class TopProcess:
     def __init__(self):
-        self.process_info = ('', 0)  # name, cpu_percent
+        self.name = ''
+        self.loadavg = 0
         self.process_list_size = 0
 
         proc_list = [proc.info for proc in psutil.process_iter(['name', 'cpu_percent']) if proc.info['cpu_percent'] > 0]
@@ -381,12 +382,13 @@ class TopProcess:
             proc_dict[proc['name']] += proc['cpu_percent']
         proc_info_list = sorted(proc_dict.items(), key=lambda p: p[1], reverse=True)
         if proc_info_list:
-            self.process_info = proc_info_list[0]
+            self.name = proc_info_list[0][0]
+            self.loadavg = proc_info_list[0][1] / 100
 
     def __str__(self):
         return '[{} {:10} {:3}]'.format(
-            convert_speed(self.process_info[1] / 100),
-            self.process_info[0][:10],
+            convert_speed(self.loadavg),
+            self.name[:10],
             self.process_list_size,
         )
 
