@@ -65,23 +65,6 @@ class Wlan:
         return result, ifreq[Wlan.IFNAMSIZE:]
 
 
-def get_freq_list() -> typing:
-    time.sleep(0.05)
-    freqs = psutil.cpu_freq(percpu=True)
-    freqs_cur = sorted(freq.current for freq in freqs)
-    freq_list_size = 4
-    freq_list = []
-    el_size = len(freqs_cur) / freq_list_size
-
-    el_sum = 0
-    for i, f in enumerate(freqs_cur):
-        el_sum += f
-        if i % el_size == el_size - 1:
-            freq_list.append(el_sum / el_size)
-            el_sum = 0
-    return [round(f / 1000, 1) for f in freq_list]
-
-
 def convert_speed(speed: float) -> str:
     if speed < 0:
         speed = 0
@@ -139,6 +122,69 @@ class Battery:
         capacity_wh = self.charge_now_ah * self.voltage_min_design_v
 
         return '[{}{:2} W {:4} Wh]'.format('+' if self.charge_status else ' ', round(power_w), round(capacity_wh, 1))
+
+
+class Cpu:
+    def __init__(self):
+        self.cpu_counters = psutil.cpu_times()
+        self.counters_time = time.time()
+
+        self.loadavg_current = 0
+        self.loadavg_1m = 0
+        self.freq_list_ghz = []
+        self.temp_c = 0
+        self.temp_crit_c = 95
+
+        self.alarm = None
+
+    def calculate(self):
+        self.freq_list_ghz = self._get_freq_list()
+
+        cpu_counters_prev = self.cpu_counters
+        counters_time_prev = self.counters_time
+
+        self.cpu_counters = psutil.cpu_times()
+        self.counters_time = time.time()
+
+        time_diff = self.counters_time - counters_time_prev
+
+        cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
+        cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
+        self.loadavg_current = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
+
+        self.loadavg_1m = round(os.getloadavg()[0], 1)
+
+        sensors_temp = psutil.sensors_temperatures()
+        try:
+            self.temp_c = [t.current for t in sensors_temp['k10temp'] if t.label == 'Tctl'][0]
+        except:
+            self.temp_c = 0
+
+        self.alarm = create_temp_alarm('CPU', self.temp_c, self.temp_crit_c)
+
+    def _get_freq_list(self) -> typing.List[float]:
+        time.sleep(0.05)
+        freqs = psutil.cpu_freq(percpu=True)
+        freqs_cur = sorted(freq.current for freq in freqs)
+        freq_list_size = 4
+        freq_list = []
+        el_size = len(freqs_cur) / freq_list_size
+
+        el_sum = 0
+        for i, f in enumerate(freqs_cur):
+            el_sum += f
+            if i % el_size == el_size - 1:
+                freq_list.append(el_sum / el_size)
+                el_sum = 0
+        return [f / 1000 for f in freq_list]
+
+    def __str__(self):
+        return '[{:4} {:4} ({}) Ghz {:2} °C]'.format(
+            round(self.loadavg_current, 1),
+            round(self.loadavg_1m, 1),
+            ' '.join('{:03}'.format(round(f, 1)) for f in self.freq_list_ghz),
+            round(self.temp_c),
+        )
 
 
 class Gpu:
@@ -301,18 +347,16 @@ class Common:
 
 
 class HardMonitorInfo:
-    def __init__(self, network_: Network, disk: Disk):
-        self.battery = Battery()
+    def __init__(self, network_: Network, disk: Disk, cpu: Cpu):
+        self.cpu = cpu
         self.gpu = Gpu()
         self.network = network_
         self.disk = disk
+        self.battery = Battery()
         self.common = Common()
 
         self.line: str = ""
-        self.alarms: typing.List[str] = []
-
-        if self.gpu.alarm:
-            self.alarms.append(self.gpu.alarm)
+        self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
 
     def show_temp(self, temp: float, limit: int, name: str) -> str:
         round_temp = round(temp)
@@ -327,9 +371,7 @@ class HardMonitorInfo:
 class HardMonitor:
     def __init__(self, period_s: float):
         sensors.init()
-        self.cpu_counters = None
-        self.counters_time = None
-
+        self.cpu = Cpu()
         self.network = Network(period_s)
         self.disk = Disk()
 
@@ -337,8 +379,7 @@ class HardMonitor:
         self.network.stop()
 
     def update_counters(self):
-        self.cpu_counters = psutil.cpu_times()
-        self.counters_time = time.time()
+        self.cpu.calculate()
         self.network.calculate()
         self.disk.calculate()
 
@@ -346,25 +387,27 @@ class HardMonitor:
         try:
             with file.open('r') as output:
                 dump = json.load(output)
+            counters_time = dump['counters_time']
+
             CpuCounters = collections.namedtuple('CpuCounters', dump['cpu_counters'])
-            self.cpu_counters = CpuCounters(**dump['cpu_counters'])
-            self.counters_time = dump['counters_time']
+            self.cpu.cpu_counters = CpuCounters(**dump['cpu_counters'])
+            self.cpu.counters_time = counters_time
 
             NetCounters = collections.namedtuple('NetCounters', dump['net_counters'])
             self.network.net_counters = NetCounters(**dump['net_counters'])
-            self.network.counters_time = self.counters_time
+            self.network.counters_time = counters_time
 
             DiskCounters = collections.namedtuple('DiskCounters', dump['disk_counters'])
             self.disk.disk_counters = DiskCounters(**dump['disk_counters'])
-            self.disk.counters_time = self.counters_time
+            self.disk.counters_time = counters_time
         except Exception:
             return False
         return True
 
     def save_json(self, file: pathlib.Path) -> None:
         dump = {
-            'counters_time': self.counters_time,
-            'cpu_counters': self.cpu_counters._asdict(),
+            'counters_time': self.cpu.counters_time,
+            'cpu_counters': self.cpu.cpu_counters._asdict(),
             'disk_counters': self.disk.disk_counters._asdict(),
             'net_counters': self.network.net_counters._asdict(),
         }
@@ -374,33 +417,16 @@ class HardMonitor:
             outfile.write(json_dump)
 
     def get_info(self) -> HardMonitorInfo:
-        cpu_freq_list = get_freq_list()
-
-        cpu_counters_prev = self.cpu_counters
-        counters_time_prev = self.counters_time
-
         self.update_counters()
-
-        time_diff = self.counters_time - counters_time_prev
-
-        cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
-        cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
-        cpu_diff = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
-
-        loadavg = round(os.getloadavg()[0], 1)
-
-        sensors_temp = psutil.sensors_temperatures()
-        cpu_temp = [t.current for t in sensors_temp['k10temp'] if t.label == 'Tctl'][0]
 
         memory = psutil.virtual_memory()
         used_memory = round(memory.used / 1024 / 1024 / 1024, 1)
         swap = psutil.swap_memory()
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
-        info = HardMonitorInfo(self.network, self.disk)
-        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} {} {} {}'.format(
-            cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
-            info.show_temp(cpu_temp, 95, 'CPU'),
+        info = HardMonitorInfo(self.network, self.disk, self.cpu)
+        info.line = '{} [{:3} {:4} GB] {} {} {} {} {}'.format(
+            info.cpu,
             used_swap, used_memory,
             info.gpu,
             info.network,
