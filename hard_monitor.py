@@ -82,17 +82,6 @@ def get_freq_list() -> typing:
     return [round(f / 1000, 1) for f in freq_list]
 
 
-def convert_net_speed(speed: float) -> str:
-    if speed < 0:
-        speed = 0
-    elif speed >= 100:
-        speed = 99
-
-    if speed < 10:
-        return '{:3}'.format(round(speed, 1))
-    return '·{}'.format(round(speed))
-
-
 def convert_speed(speed: float) -> str:
     if speed < 0:
         speed = 0
@@ -111,6 +100,16 @@ def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[s
     if temp >= limit:
         return '{} critical temp {}/{} °C'.format(name, temp, limit)
     return None
+
+
+def get_invalid_mark(size: int) -> str:
+    return '*' * size
+
+
+def print_invalid_maybe(value: typing.Optional, size: int) -> str:
+    if value is None:
+        return get_invalid_mark(size)
+    return value
 
 
 class Battery:
@@ -159,7 +158,7 @@ class Gpu:
         except:
             self.power1_average_w = 0
             self.temp2_input_c = 0
-            self.temp2_crit_c = 100
+            self.temp2_crit_c = 95
 
         self.alarm = create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
@@ -242,24 +241,71 @@ class Network:
         )
 
 
+class Disk:
+    def __init__(self):
+        self.disk_counters = psutil.disk_io_counters()
+        self.counters_time = time.time()
+
+        self.read_mbps = 0
+        self.write_mbps = 0
+        self.temp_c = 0
+        self.temp_crit_c = 65
+
+        self.alarm = None
+
+    def calculate(self):
+        disk_counters_prev = self.disk_counters
+        counters_time_prev = self.counters_time
+
+        self.disk_counters = psutil.disk_io_counters()
+        self.counters_time = time.time()
+
+        time_diff = self.counters_time - counters_time_prev
+
+        self.read_mbps = (self.disk_counters.read_bytes - disk_counters_prev.read_bytes) / time_diff / 1024 / 1024
+        self.write_mbps = (self.disk_counters.write_bytes - disk_counters_prev.write_bytes) / time_diff / 1024 / 1024
+        # disk_r_t = disk_counters.read_time - self.disk_counters.read_time
+        # disk_w_t = disk_counters.write_time - self.disk_counters.write_time
+
+        sensors_temp = psutil.sensors_temperatures()
+        try:
+            self.temp_c = max([t.current for t in sensors_temp['nvme']])
+        except:
+            self.temp_c = 0
+
+        self.alarm = create_temp_alarm('NVME', self.temp_c, self.temp_crit_c)
+
+    def __str__(self):
+        return '[{} MB/s {} MB/s {:2} °C]'.format(
+            convert_speed(self.read_mbps),
+            convert_speed(self.write_mbps),
+            round(self.temp_c),
+        )
+
+
 class Common:
     def __init__(self):
         self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
-        output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
-        if b'1' in output:
-            self.keyboard_layout = 'ru'
-        else:
-            self.keyboard_layout = 'en'
+        self.keyboard_layout = '**'
+        try:
+            output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
+            if b'1' in output:
+                self.keyboard_layout = 'ru'
+            else:
+                self.keyboard_layout = 'en'
+        except:
+            pass
 
     def __str__(self):
         return '[{} {}]'.format(self.date_time, self.keyboard_layout)
 
 
 class HardMonitorInfo:
-    def __init__(self, network_: Network):
+    def __init__(self, network_: Network, disk: Disk):
         self.battery = Battery()
         self.gpu = Gpu()
         self.network = network_
+        self.disk = disk
         self.common = Common()
 
         self.line: str = ""
@@ -282,19 +328,19 @@ class HardMonitor:
     def __init__(self, period_s: float):
         sensors.init()
         self.cpu_counters = None
-        self.disk_counters = None
         self.counters_time = None
 
         self.network = Network(period_s)
+        self.disk = Disk()
 
     def stop(self):
         self.network.stop()
 
     def update_counters(self):
         self.cpu_counters = psutil.cpu_times()
-        self.disk_counters = psutil.disk_io_counters()
         self.counters_time = time.time()
         self.network.calculate()
+        self.disk.calculate()
 
     def load_json(self, file: pathlib.Path) -> bool:
         try:
@@ -302,13 +348,15 @@ class HardMonitor:
                 dump = json.load(output)
             CpuCounters = collections.namedtuple('CpuCounters', dump['cpu_counters'])
             self.cpu_counters = CpuCounters(**dump['cpu_counters'])
-            DiskCounters = collections.namedtuple('DiskCounters', dump['disk_counters'])
-            self.disk_counters = DiskCounters(**dump['disk_counters'])
             self.counters_time = dump['counters_time']
 
             NetCounters = collections.namedtuple('NetCounters', dump['net_counters'])
             self.network.net_counters = NetCounters(**dump['net_counters'])
             self.network.counters_time = self.counters_time
+
+            DiskCounters = collections.namedtuple('DiskCounters', dump['disk_counters'])
+            self.disk.disk_counters = DiskCounters(**dump['disk_counters'])
+            self.disk.counters_time = self.counters_time
         except Exception:
             return False
         return True
@@ -317,7 +365,7 @@ class HardMonitor:
         dump = {
             'counters_time': self.counters_time,
             'cpu_counters': self.cpu_counters._asdict(),
-            'disk_counters': self.disk_counters._asdict(),
+            'disk_counters': self.disk.disk_counters._asdict(),
             'net_counters': self.network.net_counters._asdict(),
         }
         json_dump = json.dumps(dump, sort_keys=True, indent=4)
@@ -329,7 +377,6 @@ class HardMonitor:
         cpu_freq_list = get_freq_list()
 
         cpu_counters_prev = self.cpu_counters
-        disk_counters_prev = self.disk_counters
         counters_time_prev = self.counters_time
 
         self.update_counters()
@@ -339,30 +386,25 @@ class HardMonitor:
         cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
         cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
         cpu_diff = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
-        disk_r = (self.disk_counters.read_bytes - disk_counters_prev.read_bytes) / time_diff / 1024 / 1024
-        disk_w = (self.disk_counters.write_bytes - disk_counters_prev.write_bytes) / time_diff / 1024 / 1024
-        #disk_r_t = disk_counters.read_time - self.disk_counters.read_time
-        #disk_w_t = disk_counters.write_time - self.disk_counters.write_time
 
         loadavg = round(os.getloadavg()[0], 1)
 
         sensors_temp = psutil.sensors_temperatures()
         cpu_temp = [t.current for t in sensors_temp['k10temp'] if t.label == 'Tctl'][0]
-        nvme_temp = [t.current for t in sensors_temp['nvme'] if t.label == 'Sensor 1'][0]
 
         memory = psutil.virtual_memory()
         used_memory = round(memory.used / 1024 / 1024 / 1024, 1)
         swap = psutil.swap_memory()
         used_swap = round(swap.used / 1024 / 1024 / 1024, 1)
 
-        info = HardMonitorInfo(self.network)
-        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} [{} MB/s {} MB/s {}] {} {}'.format(
+        info = HardMonitorInfo(self.network, self.disk)
+        info.line = '[{:4} {:4} ({}) Ghz {}] [{:3} {:4} GB] {} {} {} {} {}'.format(
             cpu_diff, loadavg, ' '.join('{:03}'.format(f) for f in cpu_freq_list),
             info.show_temp(cpu_temp, 95, 'CPU'),
             used_swap, used_memory,
             info.gpu,
             info.network,
-            convert_speed(disk_r), convert_speed(disk_w), info.show_temp(nvme_temp, 65, 'NVME'),
+            info.disk,
             info.battery,
             info.common,
         )
