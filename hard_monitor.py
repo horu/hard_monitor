@@ -349,7 +349,9 @@ class Disk:
 
 class Common:
     def __init__(self):
-        self.date_time = datetime.datetime.now().strftime("%a %d.%m.%y %H:%M:%S")
+        self.date_time = datetime.datetime.now()
+        self.hour_utc = datetime.datetime.now(datetime.timezone.utc).hour
+        self.hour_msc = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3))).hour
         self.keyboard_layout = '**'
 
         try:
@@ -362,8 +364,11 @@ class Common:
             pass
 
     def __str__(self):
-        return '[{} {}]'.format(
-            self.date_time,
+        return '[{} {:02}/{:02}/{} {}]'.format(
+            self.date_time.strftime("%a %d.%m.%y"),
+            self.hour_utc,
+            self.hour_msc,
+            self.date_time.strftime("%H:%M:%S"),
             self.keyboard_layout,
         )
 
