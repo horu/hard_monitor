@@ -11,6 +11,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QMouseEvent
 
+import pyqtgraph as pg
+
 import sys
 import hard_monitor
 
@@ -71,6 +73,26 @@ class Window(QMainWindow):
         self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: rgb(255,0,0)')
         self.notify_label.setVisible(False)
         self.main_form.addWidget(self.notify_label)
+
+        # self.graph = self._create_graph()
+
+    def _create_graph(self):
+        graph: pg.PlotItem = pg.PlotWidget()
+        graph.setBackground((0, 0, 0, 0))
+        graph.setMaximumHeight(self.main_label.sizeHint().height())
+        graph.setMaximumWidth(200)
+
+        x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        y = [10, 30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
+        plot: pg.PlotDataItem = graph.plot(x, y, pen=pg.mkPen(0, 0, 0, 0),
+                                           fillBrush=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY),
+                                           fillLevel=1)
+        graph.hideAxis('bottom')
+        graph.hideAxis('left')
+        graph.getViewBox().autoRange(padding=0)
+
+        self.main_form.addWidget(graph)
+        return graph
 
     def set_main_label_text(self, text: str) -> None:
         self.main_label.setText(text)
