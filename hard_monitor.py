@@ -391,7 +391,7 @@ class TopProcess:
 
     def __str__(self):
         return '[{} {:3}]'.format(
-            ' / '.join('{} {:10}'.format(convert_speed(proc[1] / 100), proc[0][:10]) for proc in self.top_process_list),
+            ' '.join('{}/{:10}'.format(convert_speed(proc[1] / 100), proc[0][:10]) for proc in self.top_process_list),
             self.process_list_size,
         )
 
