@@ -56,8 +56,8 @@ class Window(QMainWindow):
         self.main_label.setVisible(True)
         self.stacked_layout.addWidget(self.main_label)
 
-        self.graph = graph.Graph(period_s)
-        self.stacked_layout.addWidget(self.graph.widget)
+        self.graph_list = graph.GraphList(period_s)
+        self.stacked_layout.addWidget(self.graph_list.widget)
 
         self.notify_label = QLabel("")
         self.notify_label.setFont(QFont('Monospace', 30))
@@ -131,7 +131,7 @@ class Backend:
     def print(self):
         info = self.hard_monitor.get_info()
         self.window.set_main_label_text(str(info))
-        self.window.graph.update(info)
+        self.window.graph_list.update(info)
 
         if info.alarms:
             self.window.notify(' '.join(info.alarms))

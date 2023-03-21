@@ -20,25 +20,19 @@ def create_widget() -> QWidget:
     return widget
 
 
-def create_graph():
+def create_graph() -> pg.PlotWidget:
     graph: pg.PlotItem = pg.PlotWidget()
     graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
     graph.setMaximumHeight(HEIGHT)
     graph.setMaximumWidth(SYMBOL_WEIGHT)
 
-    x = []
-    y = []
-    plot: pg.PlotDataItem = graph.plot(x, y, pen=pg.mkPen(0, 0, 0, 0),
-                                       fillBrush=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY),
-                                       fillLevel=True,
-                                       )
     graph.hideAxis('bottom')
     graph.hideAxis('left')
     graph.getViewBox().autoRange(padding=0)
     #graph.getViewBox().setXRange(0, 10)
     graph.getViewBox().setYRange(0, 0)
 
-    return graph, plot
+    return graph
 
 
 def create_empty_label(size_symbols: int):
@@ -50,59 +44,100 @@ def create_empty_label(size_symbols: int):
     return label
 
 
-class Load:
-    SUM_VALUE = 2
-    TIME_S = 600
+class Plot:
+    def __init__(self, graph: pg.PlotWidget, fill, x, sum_value):
+        self.graph_impl = graph
+        self.x = x
+        self.sum_value = sum_value
 
-    def __init__(self, period_s: float):
-        limit = int(Load.TIME_S / Load.SUM_VALUE / period_s)
-        self.x = np.arange(0, limit, dtype=int)
-        self.y = np.zeros(limit)
-        (self.graph, self.plot) = create_graph()
-        self.graph_width = 0
+        x = []
+        y = []
+
+        self.impl: pg.PlotDataItem = self.graph_impl.plot(
+            x, y, pen=pg.mkPen(0, 0, 0, 0),
+            fillBrush=fill,
+            fillLevel=True,
+        )
+
         self.values = []
-
-    def update_graph(self, size: int, y_min, y_max):
-        if not self.graph_width:
-            self.graph_width = size
-            self.graph.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
-            self.graph.getViewBox().setYRange(y_min, y_max * Load.SUM_VALUE, padding=0)
-            self.graph.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+        self.y = np.zeros(np.size(self.x))
 
     def add_value(self, value):
         self.values.append(value)
 
-        if len(self.values) >= CpuLoad.SUM_VALUE:
+        if len(self.values) >= self.sum_value:
             self.y = np.append(self.y, sum(self.values))
             self.y = np.delete(self.y, 0)
-            self.plot.setData(x=self.x, y=self.y)
+            self.impl.setData(x=self.x, y=self.y)
 
             self.values = []
 
+    def get_y_max(self, initial):
+        return self.y.max(initial=initial)
 
-class CpuLoad(Load):
+
+class Graph:
+    TIME_S = 600
+
+    def __init__(self, period_s: float, sum_value=2):
+        self.sum_value = sum_value
+        self.limit = int(Graph.TIME_S / self.sum_value / period_s)
+        self.x = np.arange(0, self.limit, dtype=int)
+        self.impl = create_graph()
+        self.graph_width = 0
+
+    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY)):
+        return Plot(self.impl, fill, self.x, self.sum_value)
+
+    def update_graph(self, size: int, y_min, y_max):
+        self.graph_width = size
+        self.impl.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
+        self.impl.getViewBox().setYRange(y_min, y_max * self.sum_value, padding=0)
+        self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+
+
+class CpuLoad(Graph):
     def __init__(self, period_s: float):
-        Load.__init__(self, period_s)
+        Graph.__init__(self, period_s)
+        self.plot = self.create_plot()
 
     def update(self, cpu: hard_monitor.Cpu):
         if not self.graph_width:
             self.update_graph(len(str(cpu)) - 3, 0, cpu.cpu_count)
 
-        self.add_value(cpu.loadavg_current)
+        self.plot.add_value(cpu.loadavg_current)
 
 
-class GpuLoad(Load):
+class GpuLoad(Graph):
     def __init__(self, period_s: float):
-        Load.__init__(self, period_s)
+        Graph.__init__(self, period_s)
+        self.plot = self.create_plot()
 
     def update(self, gpu: hard_monitor.Gpu):
         if not self.graph_width:
             self.update_graph(len(str(gpu)) - 2, 0, gpu.power1_cap_w)
 
-        self.add_value(gpu.power1_average_w)
+        self.plot.add_value(gpu.power1_average_w)
 
 
-class Graph:
+class NetLoad(Graph):
+    def __init__(self, period_s: float):
+        Graph.__init__(self, period_s, sum_value=1)
+        self.max_mbps = 1
+        self.recv_plot = self.create_plot()
+        #self.send_plot = self.create_plot(fill=pg.mkBrush(0, 0, 255, 255 * TRANSPARENCY))
+
+    def update(self, net: hard_monitor.Network):
+        max_mbps = max(self.recv_plot.get_y_max(0), 1)
+        if not self.graph_width or max_mbps != self.max_mbps:
+            self.max_mbps = max_mbps
+            self.update_graph(len(str(net)) - 3, 0, self.max_mbps)
+
+        self.recv_plot.add_value(net.recv_mbps)
+        #self.send_plot.add_value(net.send_mbps)
+
+
+class GraphList:
 
     def __init__(self, period_s: float):
         self.widget = create_widget()
@@ -116,16 +151,22 @@ class Graph:
 
         self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
 
-        self.cpu_load = CpuLoad(period_s)
-        self.graph_layout.addWidget(self.cpu_load.graph, alignment=Qt.AlignLeft)
+        self.cpu_graph = CpuLoad(period_s)
+        self.graph_layout.addWidget(self.cpu_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(17), alignment=Qt.AlignLeft)
 
-        self.gpu_load = GpuLoad(period_s)
-        self.graph_layout.addWidget(self.gpu_load.graph, alignment=Qt.AlignLeft)
+        self.gpu_graph = GpuLoad(period_s)
+        self.graph_layout.addWidget(self.gpu_graph.impl, alignment=Qt.AlignLeft)
+
+        self.graph_layout.addWidget(create_empty_label(3), alignment=Qt.AlignLeft)
+
+        self.network_graph = NetLoad(period_s)
+        self.graph_layout.addWidget(self.network_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(1), stretch=1)
 
     def update(self, info: hard_monitor.HardMonitorInfo):
-        self.cpu_load.update(info.cpu)
-        self.gpu_load.update(info.gpu)
+        self.cpu_graph.update(info.cpu)
+        self.gpu_graph.update(info.gpu)
+        self.network_graph.update(info.network)
