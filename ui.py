@@ -89,8 +89,9 @@ class Window(QMainWindow):
 
 
 class Backend:
-    def __init__(self, window: Window, period_s: float):
+    def __init__(self, window: Window, period_s: float, height: typing.Optional[int]):
         self.window = window
+        self.height = height
         self.reset_geometry()
 
         self.hard_monitor = hard_monitor.HardMonitor(period_s)
@@ -148,7 +149,10 @@ class Backend:
 
     def reset_geometry(self):
         monitor = QDesktopWidget().screenGeometry(0)
-        self.window.move(monitor.left(), monitor.top())
+        if self.height is None:
+            self.window.move(monitor.left(), monitor.top())
+        else:
+            self.window.move(monitor.left(), self.height)
         self.window.resize(1, 1)
 
 
@@ -158,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('-f', '--pidfile', type=pathlib.Path, default='/tmp/hard_monitor_ui_default',
                         help='File to save pid.')
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
+    parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
     args = parser.parse_args()
 
     if args.pidfile:
@@ -178,6 +183,6 @@ if __name__ == "__main__":
     win = Window()
     win.show()
 
-    back = Backend(win, args.period)
+    back = Backend(win, args.period, args.height)
 
     sys.exit(app.exec_())
