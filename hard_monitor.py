@@ -80,7 +80,7 @@ def convert_speed(speed: float) -> str:
 
 def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[str]:
     if temp >= limit:
-        return '{} critical temp {:2}/{:2} °C'.format(name, round(temp), round(limit))
+        return '{} crit t {:2}/{:2} °C'.format(name, round(temp), round(limit))
     return None
 
 
@@ -118,6 +118,8 @@ class Cpu:
     TEMP_CRIT_C = 90
 
     def __init__(self):
+        self.cpu_count = psutil.cpu_count()
+
         self.cpu_counters = psutil.cpu_times()
         self.counters_time = time.time()
 

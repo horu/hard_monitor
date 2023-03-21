@@ -11,33 +11,16 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QMouseEvent
 
-import pyqtgraph as pg
-
 import sys
 import hard_monitor
-
-TRANSPARENCY = 0.7
-
-
-def create_form() -> QFormLayout:
-    form = QFormLayout()
-    form.setHorizontalSpacing(0)
-    form.setVerticalSpacing(0)
-    return form
-
-
-def create_widget() -> QWidget:
-    widget = QWidget()
-    widget.setStyleSheet('padding :0px; background-color: rgba(0,0,0,{}%); color: white'
-                         .format(int(TRANSPARENCY * 100)))
-    return widget
+import graph
 
 
 class Window(QMainWindow):
     """Main Window."""
-    def __init__(self, parent=None):
+    def __init__(self, period_s: float):
         """Initializer."""
-        super().__init__(parent)
+        super().__init__(None)
         self.setWindowTitle("Hw monitor")
 
         self.setWindowOpacity(1)
@@ -50,61 +33,38 @@ class Window(QMainWindow):
                             Qt.WindowDoesNotAcceptFocus |
                             Qt.BypassGraphicsProxyWidget)
 
-        self.central_widget = create_widget()
+        self.central_widget = graph.create_widget()
         self.setCentralWidget(self.central_widget)
 
         # position for move window
         self.drag_position = QPoint()
 
-        self.main_layout = QVBoxLayout()
+        self.main_layout = QFormLayout()
         self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setHorizontalSpacing(0)
+        self.main_layout.setVerticalSpacing(0)
         self.central_widget.setLayout(self.main_layout)
 
-        # self.stacked_layout = QStackedLayout()
-        # self.stacked_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
-        # self.main_layout.addLayout(self.stacked_layout)
+        self.stacked_layout = QStackedLayout()
+        self.stacked_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
+        self.main_layout.addRow(self.stacked_layout)
 
         self.main_label = QLabel("")
         self.main_label.setFont(QFont('Monospace', 10))
         self.main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.main_label.setStyleSheet('padding :0px; background-color: rgba(0,0,0,0%); color: lightgreen')
+        self.main_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: lightgreen')
         self.main_label.setVisible(True)
-        self.main_layout.addWidget(self.main_label)
+        self.stacked_layout.addWidget(self.main_label)
 
-        # self.graph_layout = QHBoxLayout()
-        # self.graph_layout.setContentsMargins(0, 0, 0, 0)
-        # self.stacked_layout.addItem(self.graph_layout)
+        self.graph = graph.Graph(period_s)
+        self.stacked_layout.addWidget(self.graph.widget)
 
         self.notify_label = QLabel("")
         self.notify_label.setFont(QFont('Monospace', 30))
         self.notify_label.setAlignment(Qt.AlignCenter)
         self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: rgb(255,0,0)')
         self.notify_label.setVisible(False)
-        self.main_layout.addWidget(self.notify_label)
-
-        # self.graph = self._create_graph()
-
-    def _create_graph(self):
-        graph: pg.PlotItem = pg.PlotWidget()
-        graph.setBackground((0, 0, 0, 0))
-        graph.setMaximumHeight(self.main_label.sizeHint().height())
-        graph.setMaximumWidth(200)
-
-        x = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        y = [32, 30, 32, 34, 32, 33, 31, 29, 32, 35, 45]
-        plot: pg.PlotDataItem = graph.plot(x, y, pen=pg.mkPen(0, 0, 0, 0),
-                                           fillBrush=pg.mkBrush(255, 0, 0, 255 * 0.2),
-                                           fillLevel=True,
-                                           )
-        graph.hideAxis('bottom')
-        graph.hideAxis('left')
-        graph.getViewBox().autoRange(padding=0)
-        graph.getViewBox().setBackgroundColor(None)
-        graph.getViewBox().setXRange(0, 20)
-        graph.getViewBox().setYRange(0, 50)
-
-        self.graph_layout.addWidget(graph)
-        return graph
+        self.main_layout.addRow(self.notify_label)
 
     def set_main_label_text(self, text: str) -> None:
         self.main_label.setText(text)
@@ -171,6 +131,7 @@ class Backend:
     def print(self):
         info = self.hard_monitor.get_info()
         self.window.set_main_label_text(str(info))
+        self.window.graph.update(info)
 
         if info.alarms:
             self.window.notify(' '.join(info.alarms))
@@ -211,7 +172,7 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
 
     app = QApplication(sys.argv)
-    win = Window()
+    win = Window(args.period)
     win.show()
 
     back = Backend(win, args.period, args.height)
