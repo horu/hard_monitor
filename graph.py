@@ -11,6 +11,8 @@ TRANSPARENCY = 0.7
 HEIGHT = 17
 SYMBOL_WEIGHT = 8
 
+TEST = 0
+
 
 def create_widget() -> QWidget:
     widget = QWidget()
@@ -20,7 +22,7 @@ def create_widget() -> QWidget:
 
 def create_graph():
     graph: pg.PlotItem = pg.PlotWidget()
-    graph.setBackground((0, 0, 0, 255 * TRANSPARENCY))
+    graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
     graph.setMaximumHeight(HEIGHT)
     graph.setMaximumWidth(SYMBOL_WEIGHT)
 
@@ -48,26 +50,27 @@ def create_empty_label(size_symbols: int):
     return label
 
 
-class CpuLoad:
+class Load:
     SUM_VALUE = 2
     TIME_S = 600
 
     def __init__(self, period_s: float):
-        limit = int(CpuLoad.TIME_S / CpuLoad.SUM_VALUE / period_s)
+        limit = int(Load.TIME_S / Load.SUM_VALUE / period_s)
         self.x = np.arange(0, limit, dtype=int)
         self.y = np.zeros(limit)
         (self.graph, self.plot) = create_graph()
         self.graph_width = 0
         self.values = []
 
-    def update(self, cpu: hard_monitor.Cpu):
+    def update_graph(self, size: int, y_min, y_max):
         if not self.graph_width:
-            self.graph_width = len(str(cpu)) - 3
+            self.graph_width = size
             self.graph.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
-            self.graph.getViewBox().setYRange(0, cpu.cpu_count * CpuLoad.SUM_VALUE, padding=0)
+            self.graph.getViewBox().setYRange(y_min, y_max * Load.SUM_VALUE, padding=0)
             self.graph.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
-        self.values.append(cpu.loadavg_current)
+    def add_value(self, value):
+        self.values.append(value)
 
         if len(self.values) >= CpuLoad.SUM_VALUE:
             self.y = np.append(self.y, sum(self.values))
@@ -75,6 +78,28 @@ class CpuLoad:
             self.plot.setData(x=self.x, y=self.y)
 
             self.values = []
+
+
+class CpuLoad(Load):
+    def __init__(self, period_s: float):
+        Load.__init__(self, period_s)
+
+    def update(self, cpu: hard_monitor.Cpu):
+        if not self.graph_width:
+            self.update_graph(len(str(cpu)) - 3, 0, cpu.cpu_count)
+
+        self.add_value(cpu.loadavg_current)
+
+
+class GpuLoad(Load):
+    def __init__(self, period_s: float):
+        Load.__init__(self, period_s)
+
+    def update(self, gpu: hard_monitor.Gpu):
+        if not self.graph_width:
+            self.update_graph(len(str(gpu)) - 2, 0, gpu.power1_cap_w)
+
+        self.add_value(gpu.power1_average_w)
 
 
 class Graph:
@@ -94,7 +119,13 @@ class Graph:
         self.cpu_load = CpuLoad(period_s)
         self.graph_layout.addWidget(self.cpu_load.graph, alignment=Qt.AlignLeft)
 
+        self.graph_layout.addWidget(create_empty_label(17), alignment=Qt.AlignLeft)
+
+        self.gpu_load = GpuLoad(period_s)
+        self.graph_layout.addWidget(self.gpu_load.graph, alignment=Qt.AlignLeft)
+
         self.graph_layout.addWidget(create_empty_label(1), stretch=1)
 
     def update(self, info: hard_monitor.HardMonitorInfo):
         self.cpu_load.update(info.cpu)
+        self.gpu_load.update(info.gpu)

@@ -189,6 +189,8 @@ class Gpu:
             hwmon_path = self._find_hwmon()
             with (hwmon_path / 'power1_average').open('r') as file:
                 self.power1_average_w = int(file.readline()) / 1000000
+            with (hwmon_path / 'power1_cap').open('r') as file:
+                self.power1_cap_w = int(file.readline()) / 1000000
             with (hwmon_path / 'temp2_input').open('r') as file:
                 self.temp2_input_c = int(file.readline()) / 1000
             with (hwmon_path / 'temp2_crit').open('r') as file:
@@ -199,6 +201,7 @@ class Gpu:
             #     self.freq2_input_ghz = int(file.readline()) / 1000000000
         except:
             self.power1_average_w = 0
+            self.power1_cap_w = 0
             self.temp2_input_c = 0
             self.temp2_crit_c = 90
 
