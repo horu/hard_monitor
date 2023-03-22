@@ -29,7 +29,6 @@ def create_graph(graph_height: int) -> pg.PlotWidget:
     graph.hideAxis('bottom')
     graph.hideAxis('left')
     graph.getViewBox().autoRange(padding=0)
-    #graph.getViewBox().setXRange(0, 10)
     graph.getViewBox().setYRange(0, 0)
 
     return graph
@@ -84,8 +83,8 @@ class Graph:
 
     def __init__(self, period_s: float, graph_height: int, sum_value=2):
         self.sum_value = sum_value
-        self.limit = int(Graph.TIME_S / self.sum_value / period_s)
-        self.x = np.arange(0, self.limit, dtype=int)
+        self.x_limit = int(Graph.TIME_S / self.sum_value / period_s)
+        self.x = np.arange(0, self.x_limit, dtype=int)
         self.impl = create_graph(graph_height)
         self.graph_width = 0
 
