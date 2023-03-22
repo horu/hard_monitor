@@ -2,6 +2,8 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QMouseEvent
 
+import math
+
 import numpy as np
 import pyqtgraph as pg
 
@@ -129,7 +131,7 @@ class Label:
     def set_y_log_range(self, y_min, y_max):
         if not self.range_is_set:
             self.graph.impl.setLogMode(y=True)
-            self.graph.impl.getViewBox().setYRange(y_min, y_max, padding=0)
+            self.graph.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.graph.sum_value), padding=0)
             self.graph.set_x_range()
             self.range_is_set = True
 
@@ -171,15 +173,39 @@ class Gpu:
 class Network:
     def __init__(self, *args, **kwargs):
         self.label = Label(*args, **kwargs)
-        self.label.set_y_log_range(-1, 1.3)
-        self.recv_plot = self.label.graph.create_plot(fill_level=-1)
-        self.send_plot = self.label.graph.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY), fill_level=-1)
+
+        y_min = -1  # 0.1 mbps
+        y_max = 1  # 10 mbps
+        self.label.set_y_log_range(y_min, y_max)
+        self.recv_plot = self.label.graph.create_plot(fill_level=y_min)
+        self.send_plot = self.label.graph.create_plot(
+            fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY),
+            fill_level=y_min)
 
     def update(self, net: hard_monitor.Network):
         self.label.update(str(net))
 
         self.recv_plot.add_value(net.recv_mbps)
         self.send_plot.add_value(net.send_mbps)
+
+
+class Disk:
+    def __init__(self, *args, **kwargs):
+        self.label = Label(*args, **kwargs)
+
+        y_min = 0  # 1 mbps
+        y_max = 2  # 100 mbps
+        self.label.set_y_log_range(y_min, y_max)
+        self.write_plot = self.label.graph.create_plot(fill_level=y_min)
+        self.read_plot = self.label.graph.create_plot(
+            fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY),
+            fill_level=y_min)
+
+    def update(self, disk: hard_monitor.Disk):
+        self.label.update(str(disk))
+
+        self.write_plot.add_value(disk.write_mbps)
+        self.read_plot.add_value(disk.read_mbps)
 
 
 class GraphList:
@@ -197,7 +223,7 @@ class GraphList:
         self.memory = self._create_label(DefaultLabel)
         self.gpu = self._create_label(Gpu)
         self.network = self._create_label(Network)
-        self.disk = self._create_label(DefaultLabel)
+        self.disk = self._create_label(Disk)
         self.battery = self._create_label(DefaultLabel)
         self.common = self._create_label(DefaultLabel)
         self.top_process = self._create_label(DefaultLabel)
