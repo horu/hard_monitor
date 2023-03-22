@@ -98,7 +98,7 @@ class Graph:
             self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
 
-class CpuLoad(Graph):
+class Cpu(Graph):
     def __init__(self, *args, **kwargs):
         Graph.__init__(self, *args, **kwargs)
         self.plot = self.create_plot()
@@ -109,7 +109,7 @@ class CpuLoad(Graph):
         self.plot.add_value(cpu.loadavg_current)
 
 
-class GpuLoad(Graph):
+class Gpu(Graph):
     def __init__(self, *args, **kwargs):
         Graph.__init__(self, *args, **kwargs)
         self.plot = self.create_plot()
@@ -120,7 +120,7 @@ class GpuLoad(Graph):
         self.plot.add_value(gpu.power1_average_w)
 
 
-class NetLoad(Graph):
+class Network(Graph):
     def __init__(self, *args, **kwargs):
         Graph.__init__(self, *args, **kwargs)
         self.impl.setLogMode(y=True)
@@ -148,17 +148,17 @@ class GraphList:
 
         self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
 
-        self.cpu_graph = CpuLoad(period_s, graph_height)
+        self.cpu_graph = Cpu(period_s, graph_height)
         self.graph_layout.addWidget(self.cpu_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(17), alignment=Qt.AlignLeft)
 
-        self.gpu_graph = GpuLoad(period_s, graph_height)
+        self.gpu_graph = Gpu(period_s, graph_height)
         self.graph_layout.addWidget(self.gpu_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(3), alignment=Qt.AlignLeft)
 
-        self.network_graph = NetLoad(period_s, graph_height)
+        self.network_graph = Network(period_s, graph_height)
         self.graph_layout.addWidget(self.network_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(1), stretch=1)
