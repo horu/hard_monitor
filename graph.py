@@ -20,11 +20,11 @@ def create_widget() -> QWidget:
     return widget
 
 
-def create_graph() -> pg.PlotWidget:
+def create_graph(graph_height: int) -> pg.PlotWidget:
     graph: pg.PlotItem = pg.PlotWidget()
     graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
-    graph.setMaximumHeight(HEIGHT)
-    graph.setMaximumWidth(SYMBOL_WEIGHT)
+    graph.setFixedHeight(graph_height)
+    graph.setFixedWidth(SYMBOL_WEIGHT)
 
     graph.hideAxis('bottom')
     graph.hideAxis('left')
@@ -56,7 +56,7 @@ class Plot:
         self.impl: pg.PlotDataItem = self.graph_impl.plot(
             x, y, pen=pg.mkPen(0, 0, 0, 0),
             fillBrush=fill,
-            fillLevel=True,
+            fillLevel=0,
         )
 
         self.values = []
@@ -79,11 +79,11 @@ class Plot:
 class Graph:
     TIME_S = 600
 
-    def __init__(self, period_s: float, sum_value=2):
+    def __init__(self, period_s: float, graph_height: int, sum_value=2):
         self.sum_value = sum_value
         self.limit = int(Graph.TIME_S / self.sum_value / period_s)
         self.x = np.arange(0, self.limit, dtype=int)
-        self.impl = create_graph()
+        self.impl = create_graph(graph_height)
         self.graph_width = 0
 
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY)):
@@ -97,8 +97,8 @@ class Graph:
 
 
 class CpuLoad(Graph):
-    def __init__(self, period_s: float):
-        Graph.__init__(self, period_s)
+    def __init__(self, *args, **kwargs):
+        Graph.__init__(self, *args, **kwargs)
         self.plot = self.create_plot()
 
     def update(self, cpu: hard_monitor.Cpu):
@@ -109,8 +109,8 @@ class CpuLoad(Graph):
 
 
 class GpuLoad(Graph):
-    def __init__(self, period_s: float):
-        Graph.__init__(self, period_s)
+    def __init__(self, *args, **kwargs):
+        Graph.__init__(self, *args, **kwargs)
         self.plot = self.create_plot()
 
     def update(self, gpu: hard_monitor.Gpu):
@@ -121,14 +121,14 @@ class GpuLoad(Graph):
 
 
 class NetLoad(Graph):
-    def __init__(self, period_s: float):
-        Graph.__init__(self, period_s, sum_value=1)
-        self.max_mbps = 1
+    def __init__(self, *args, **kwargs):
+        Graph.__init__(self, *args, **kwargs)
+        self.max_mbps = 5
         self.recv_plot = self.create_plot()
         #self.send_plot = self.create_plot(fill=pg.mkBrush(0, 0, 255, 255 * TRANSPARENCY))
 
     def update(self, net: hard_monitor.Network):
-        max_mbps = max(self.recv_plot.get_y_max(0), 1)
+        max_mbps = max(self.recv_plot.get_y_max(0), 5)
         if not self.graph_width or max_mbps != self.max_mbps:
             self.max_mbps = max_mbps
             self.update_graph(len(str(net)) - 3, 0, self.max_mbps)
@@ -139,7 +139,7 @@ class NetLoad(Graph):
 
 class GraphList:
 
-    def __init__(self, period_s: float):
+    def __init__(self, period_s: float, graph_height: int):
         self.widget = create_widget()
 
         self.graph_layout = QHBoxLayout()
@@ -151,17 +151,17 @@ class GraphList:
 
         self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
 
-        self.cpu_graph = CpuLoad(period_s)
+        self.cpu_graph = CpuLoad(period_s, graph_height)
         self.graph_layout.addWidget(self.cpu_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(17), alignment=Qt.AlignLeft)
 
-        self.gpu_graph = GpuLoad(period_s)
+        self.gpu_graph = GpuLoad(period_s, graph_height)
         self.graph_layout.addWidget(self.gpu_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(3), alignment=Qt.AlignLeft)
 
-        self.network_graph = NetLoad(period_s)
+        self.network_graph = NetLoad(period_s, graph_height)
         self.graph_layout.addWidget(self.network_graph.impl, alignment=Qt.AlignLeft)
 
         self.graph_layout.addWidget(create_empty_label(1), stretch=1)
