@@ -72,6 +72,9 @@ class Plot:
 
             self.values = []
 
+    def update_graph(self, y_min):
+        self.impl.setFillLevel(y_min)
+
     def get_y_max(self, initial):
         return self.y.max(initial=initial)
 
@@ -89,8 +92,8 @@ class Graph:
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY)):
         return Plot(self.impl, fill, self.x, self.sum_value)
 
-    def update_graph(self, size: int, y_min, y_max):
-        self.graph_width = size
+    def update_graph(self, width: int, y_min, y_max):
+        self.graph_width = width
         self.impl.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
         self.impl.getViewBox().setYRange(y_min, y_max * self.sum_value, padding=0)
         self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
@@ -125,16 +128,16 @@ class NetLoad(Graph):
         Graph.__init__(self, *args, **kwargs)
         self.max_mbps = 5
         self.recv_plot = self.create_plot()
-        #self.send_plot = self.create_plot(fill=pg.mkBrush(0, 0, 255, 255 * TRANSPARENCY))
+        self.send_plot = self.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY))
 
     def update(self, net: hard_monitor.Network):
-        max_mbps = max(self.recv_plot.get_y_max(0), 5)
+        max_mbps = max(self.recv_plot.get_y_max(0), self.send_plot.get_y_max(0), 5)
         if not self.graph_width or max_mbps != self.max_mbps:
             self.max_mbps = max_mbps
             self.update_graph(len(str(net)) - 3, 0, self.max_mbps)
 
         self.recv_plot.add_value(net.recv_mbps)
-        #self.send_plot.add_value(net.send_mbps)
+        self.send_plot.add_value(net.send_mbps)
 
 
 class GraphList:
