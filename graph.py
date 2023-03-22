@@ -44,19 +44,10 @@ def create_empty_label(size_symbols: int):
 
 
 class Plot:
-    def __init__(self, graph: pg.PlotWidget, fill, x, sum_value):
-        self.graph_impl = graph
+    def __init__(self, impl: pg.PlotDataItem, x: np.array, values_size: int):
+        self.impl = impl
         self.x = x
-        self.sum_value = sum_value
-
-        x = []
-        y = []
-
-        self.impl: pg.PlotDataItem = self.graph_impl.plot(
-            x, y, pen=pg.mkPen(0, 0, 0, 0),
-            fillBrush=fill,
-            fillLevel=0,
-        )
+        self.values_size = values_size
 
         self.values = []
         self.y = np.zeros(np.size(self.x))
@@ -64,7 +55,7 @@ class Plot:
     def add_value(self, value):
         self.values.append(value)
 
-        if len(self.values) >= self.sum_value:
+        if len(self.values) >= self.values_size:
             self.y = np.append(self.y, sum(self.values))
             self.y = np.delete(self.y, 0)
             self.impl.setData(x=self.x, y=self.y)
@@ -88,14 +79,23 @@ class Graph:
         self.impl = create_graph(graph_height)
         self.graph_width = 0
 
-    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY)):
-        return Plot(self.impl, fill, self.x, self.sum_value)
+    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY), fill_level=0):
+        x = []
+        y = []
+
+        plot_impl: pg.PlotDataItem = self.impl.plot(
+            x, y, pen=pg.mkPen(0, 0, 0, 0),
+            fillBrush=fill,
+            fillLevel=fill_level,
+        )
+        return Plot(plot_impl, self.x, self.sum_value)
 
     def update_graph(self, width: int, y_min, y_max):
-        self.graph_width = width
-        self.impl.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
-        self.impl.getViewBox().setYRange(y_min, y_max * self.sum_value, padding=0)
-        self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+        if not self.graph_width:
+            self.graph_width = width
+            self.impl.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
+            self.impl.getViewBox().setYRange(y_min, y_max * self.sum_value, padding=0)
+            self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
 
 class CpuLoad(Graph):
@@ -104,8 +104,7 @@ class CpuLoad(Graph):
         self.plot = self.create_plot()
 
     def update(self, cpu: hard_monitor.Cpu):
-        if not self.graph_width:
-            self.update_graph(len(str(cpu)) - 3, 0, cpu.cpu_count)
+        self.update_graph(len(str(cpu)) - 3, 0, cpu.cpu_count)
 
         self.plot.add_value(cpu.loadavg_current)
 
@@ -116,8 +115,7 @@ class GpuLoad(Graph):
         self.plot = self.create_plot()
 
     def update(self, gpu: hard_monitor.Gpu):
-        if not self.graph_width:
-            self.update_graph(len(str(gpu)) - 2, 0, gpu.power1_cap_w)
+        self.update_graph(len(str(gpu)) - 2, 0, gpu.power1_cap_w)
 
         self.plot.add_value(gpu.power1_average_w)
 
@@ -125,12 +123,12 @@ class GpuLoad(Graph):
 class NetLoad(Graph):
     def __init__(self, *args, **kwargs):
         Graph.__init__(self, *args, **kwargs)
-        self.recv_plot = self.create_plot()
-        self.send_plot = self.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY))
+        self.impl.setLogMode(y=True)
+        self.recv_plot = self.create_plot(fill_level=-1)
+        self.send_plot = self.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY), fill_level=-1)
 
     def update(self, net: hard_monitor.Network):
-        if not self.graph_width:
-            self.update_graph(len(str(net)) - 3, 0, 5)
+        self.update_graph(len(str(net)) - 3, -1, 1.3 / self.sum_value)
 
         self.recv_plot.add_value(net.recv_mbps)
         self.send_plot.add_value(net.send_mbps)
