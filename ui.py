@@ -18,7 +18,7 @@ import graph
 
 class Window(QMainWindow):
     """Main Window."""
-    def __init__(self, period_s: float, graph_height: int):
+    def __init__(self, config: graph.GraphConfig):
         """Initializer."""
         super().__init__(None)
         self.setWindowTitle("Hw monitor")
@@ -45,7 +45,7 @@ class Window(QMainWindow):
         self.main_layout.setVerticalSpacing(0)
         self.central_widget.setLayout(self.main_layout)
 
-        self.graph_list = graph.GraphList(period_s, graph_height)
+        self.graph_list = graph.GraphList(config)
         self.main_layout.addRow(self.graph_list.graph_layout)
 
         self.notify_label = QLabel("")
@@ -145,7 +145,8 @@ if __name__ == "__main__":
                         help='File to save pid.')
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
     parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
-    parser.add_argument('-g', '--graph_height', type=int, default=20, help='Location height of graph.')
+    parser.add_argument('-g', '--graph_height', type=int, default=20, help='Location height of graph pixels')
+    parser.add_argument('-t', '--graph_time', type=int, default=600, help='Total graph timeline sec')
     args = parser.parse_args()
 
     if args.pidfile:
@@ -163,7 +164,14 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
 
     app = QApplication(sys.argv)
-    win = Window(args.period, args.graph_height)
+
+    default_graph_config = graph.GraphConfig(
+        period_s=args.period,
+        graph_height=args.graph_height,
+        total_time_s=args.graph_time,
+    )
+
+    win = Window(default_graph_config)
     win.show()
 
     back = Backend(win, args.period, args.height)

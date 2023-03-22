@@ -9,7 +9,7 @@ import pyqtgraph as pg
 
 import hard_monitor
 
-TRANSPARENCY = 0.7
+TRANSPARENCY = 0.5
 HEIGHT = 17
 SYMBOL_WEIGHT = 8
 
@@ -68,14 +68,20 @@ class Plot:
         return self.y.max(initial=initial)
 
 
-class Graph:
-    TIME_S = 600
-
-    def __init__(self, period_s: float, graph_height: int, sum_value=2):
+class GraphConfig:
+    def __init__(self, period_s: float, graph_height: int, sum_value: int = 2, total_time_s: int = 600):
+        self.period_s = period_s
+        self.graph_height = graph_height
         self.sum_value = sum_value
-        self.x_limit = int(Graph.TIME_S / self.sum_value / period_s)
+        self.total_time_s = total_time_s
+
+
+class Graph:
+    def __init__(self, config: GraphConfig):
+        self.config = config
+        self.x_limit = int(self.config.total_time_s / self.config.sum_value / self.config.period_s)
         self.x = np.arange(0, self.x_limit, dtype=int)
-        self.impl = create_graph(graph_height)
+        self.impl = create_graph(self.config.graph_height)
 
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY), fill_level=0):
         x = []
@@ -86,7 +92,7 @@ class Graph:
             fillBrush=fill,
             fillLevel=fill_level,
         )
-        return Plot(plot_impl, self.x, self.sum_value)
+        return Plot(plot_impl, self.x, self.config.sum_value)
 
     def set_x_range(self):
         self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
@@ -124,14 +130,14 @@ class Label:
 
     def set_y_range(self, y_min, y_max):
         if not self.range_is_set:
-            self.graph.impl.getViewBox().setYRange(y_min, y_max * self.graph.sum_value, padding=0)
+            self.graph.impl.getViewBox().setYRange(y_min, y_max * self.graph.config.sum_value, padding=0)
             self.graph.set_x_range()
             self.range_is_set = True
 
     def set_y_log_range(self, y_min, y_max):
         if not self.range_is_set:
             self.graph.impl.setLogMode(y=True)
-            self.graph.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.graph.sum_value), padding=0)
+            self.graph.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.graph.config.sum_value), padding=0)
             self.graph.set_x_range()
             self.range_is_set = True
 
@@ -157,6 +163,19 @@ class Cpu:
         self.label.update(str(cpu))
         self.label.set_y_range(0, cpu.cpu_count)
         self.plot.add_value(cpu.loadavg_current)
+
+
+class Memory:
+    def __init__(self, *args, **kwargs):
+        self.label = Label(*args, **kwargs)
+        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * TRANSPARENCY / 4))
+        self.used_plot = self.label.graph.create_plot()
+
+    def update(self, memory: hard_monitor.Memory):
+        self.label.update(str(memory))
+        self.label.set_y_range(0, memory.total_gb)
+        self.used_plot.add_value(memory.used_gb)
+        self.cache_plot.add_value(memory.used_gb + memory.cached_gb + memory.buffers_gb)
 
 
 class Gpu:
@@ -210,9 +229,8 @@ class Disk:
 
 class GraphList:
 
-    def __init__(self, period_s: float, graph_height: int):
-        self.period_s = period_s
-        self.graph_height = graph_height
+    def __init__(self, config: GraphConfig):
+        self.config = config
 
         self.graph_layout = QHBoxLayout()
         self.graph_layout.setSpacing(0)
@@ -220,7 +238,7 @@ class GraphList:
         self.graph_layout.setAlignment(Qt.AlignLeft)
 
         self.cpu = self._create_label(Cpu)
-        self.memory = self._create_label(DefaultLabel)
+        self.memory = self._create_label(Memory)
         self.gpu = self._create_label(Gpu)
         self.network = self._create_label(Network)
         self.disk = self._create_label(Disk)
@@ -229,7 +247,7 @@ class GraphList:
         self.top_process = self._create_label(DefaultLabel)
 
     def _create_label(self, label_type):
-        label = label_type(self.period_s, self.graph_height)
+        label = label_type(self.config)
         self.graph_layout.addLayout(label.label.stacked_layout)
         return label
 

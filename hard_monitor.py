@@ -230,6 +230,9 @@ class Memory:
     def __init__(self):
         memory = psutil.virtual_memory()
         self.used_gb = memory.used / 1024 / 1024 / 1024
+        self.cached_gb = memory.cached / 1024 / 1024 / 1024
+        self.buffers_gb = memory.buffers / 1024 / 1024 / 1024
+        self.total_gb = memory.total / 1024 / 1024 / 1024
         swap = psutil.swap_memory()
         self.swap_gb = swap.used / 1024 / 1024 / 1024
 
