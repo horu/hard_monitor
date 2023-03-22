@@ -55,13 +55,6 @@ class Window(QMainWindow):
         self.notify_label.setVisible(False)
         self.main_layout.addRow(self.notify_label)
 
-    def set_main_label_text(self, text: str) -> None:
-        pass
-        # self.main_label.setText(text)
-        #logging.debug(self.central_widget.geometry().size().height())
-        #logging.debug(self.main_layout.totalMinimumSize().height())
-        #logging.debug(self.main_layout.sizeConstraint().)
-
     def notify(self, text: typing.Optional[str]):
         if not text:
             text = ''
@@ -120,7 +113,6 @@ class Backend:
 
     def print(self):
         info = self.hard_monitor.get_info()
-        self.window.set_main_label_text(str(info))
         self.window.graph_list.update(info)
 
         if info.alarms:
