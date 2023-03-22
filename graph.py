@@ -12,8 +12,6 @@ import hard_monitor
 FONT_SIZE = 10
 TRANSPARENCY = 0.7
 GRAPH_TR = 0.5
-HEIGHT = 17
-SYMBOL_WEIGHT = 8
 
 TEST = 0
 
@@ -28,7 +26,6 @@ def create_graph(graph_height: int) -> pg.PlotWidget:
     graph: pg.PlotItem = pg.PlotWidget()
     graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
     graph.setFixedHeight(graph_height)
-    #graph.setFixedWidth(SYMBOL_WEIGHT)
 
     graph.hideAxis('bottom')
     graph.hideAxis('left')
@@ -38,10 +35,10 @@ def create_graph(graph_height: int) -> pg.PlotWidget:
     return graph
 
 
-def create_empty_label(size_symbols: int):
+def create_empty_label(size_symbols: int, trans: float = TRANSPARENCY):
     label = QLabel(' ' * size_symbols)
     label.setFont(QFont('Monospace', FONT_SIZE))
-    label.setStyleSheet('background-color: rgba(0,0,0,{}%)'.format(int(TRANSPARENCY * 100)))
+    label.setStyleSheet('background-color: rgba(0,0,0,{}%)'.format(int(trans * 100)))
     label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     label.setVisible(True)
     return label
@@ -250,7 +247,7 @@ class GraphList:
 
     def _create_label(self, label_type, first=False):
         if not first:
-            empty_label = create_empty_label(1)
+            empty_label = create_empty_label(1, trans=0)
             empty_label.setFixedHeight(self.config.graph_height)
             self.graph_layout.addWidget(empty_label, alignment=Qt.AlignLeft | Qt.AlignTop)
         label = label_type(self.config)
