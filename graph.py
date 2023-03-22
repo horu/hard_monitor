@@ -9,7 +9,8 @@ import pyqtgraph as pg
 
 import hard_monitor
 
-TRANSPARENCY = 0.5
+TRANSPARENCY = 0.7
+GRAPH_TR = 0.5
 HEIGHT = 17
 SYMBOL_WEIGHT = 8
 
@@ -83,7 +84,7 @@ class Graph:
         self.x = np.arange(0, self.x_limit, dtype=int)
         self.impl = create_graph(self.config.graph_height)
 
-    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY), fill_level=0):
+    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * GRAPH_TR), fill_level=0):
         x = []
         y = []
 
@@ -168,7 +169,7 @@ class Cpu:
 class Memory:
     def __init__(self, *args, **kwargs):
         self.label = Label(*args, **kwargs)
-        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * TRANSPARENCY / 4))
+        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * GRAPH_TR / 4))
         self.used_plot = self.label.graph.create_plot()
 
     def update(self, memory: hard_monitor.Memory):
@@ -198,7 +199,7 @@ class Network:
         self.label.set_y_log_range(y_min, y_max)
         self.recv_plot = self.label.graph.create_plot(fill_level=y_min)
         self.send_plot = self.label.graph.create_plot(
-            fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY),
+            fill=pg.mkBrush(100, 100, 255, 255 * GRAPH_TR),
             fill_level=y_min)
 
     def update(self, net: hard_monitor.Network):
@@ -217,7 +218,7 @@ class Disk:
         self.label.set_y_log_range(y_min, y_max)
         self.write_plot = self.label.graph.create_plot(fill_level=y_min)
         self.read_plot = self.label.graph.create_plot(
-            fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY),
+            fill=pg.mkBrush(100, 100, 255, 255 * GRAPH_TR),
             fill_level=y_min)
 
     def update(self, disk: hard_monitor.Disk):
