@@ -238,7 +238,7 @@ class GraphList:
         self.graph_layout.setContentsMargins(0, 0, 0, 0)
         self.graph_layout.setAlignment(Qt.AlignLeft)
 
-        self.cpu = self._create_label(Cpu)
+        self.cpu = self._create_label(Cpu, first=True)
         self.memory = self._create_label(Memory)
         self.gpu = self._create_label(Gpu)
         self.network = self._create_label(Network)
@@ -247,7 +247,9 @@ class GraphList:
         self.common = self._create_label(DefaultLabel)
         self.top_process = self._create_label(DefaultLabel)
 
-    def _create_label(self, label_type):
+    def _create_label(self, label_type, first=False):
+        if not first:
+            self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
         label = label_type(self.config)
         self.graph_layout.addLayout(label.label.stacked_layout)
         return label
