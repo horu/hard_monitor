@@ -125,15 +125,12 @@ class GpuLoad(Graph):
 class NetLoad(Graph):
     def __init__(self, *args, **kwargs):
         Graph.__init__(self, *args, **kwargs)
-        self.max_mbps = 5
         self.recv_plot = self.create_plot()
         self.send_plot = self.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY))
 
     def update(self, net: hard_monitor.Network):
-        max_mbps = max(self.recv_plot.get_y_max(0), self.send_plot.get_y_max(0), 5)
-        if not self.graph_width or max_mbps != self.max_mbps:
-            self.max_mbps = max_mbps
-            self.update_graph(len(str(net)) - 3, 0, self.max_mbps)
+        if not self.graph_width:
+            self.update_graph(len(str(net)) - 3, 0, 5)
 
         self.recv_plot.add_value(net.recv_mbps)
         self.send_plot.add_value(net.send_mbps)
