@@ -45,19 +45,8 @@ class Window(QMainWindow):
         self.main_layout.setVerticalSpacing(0)
         self.central_widget.setLayout(self.main_layout)
 
-        self.stacked_layout = QStackedLayout()
-        self.stacked_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
-        self.main_layout.addRow(self.stacked_layout)
-
-        self.main_label = QLabel("")
-        self.main_label.setFont(QFont('Monospace', 10))
-        self.main_label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.main_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: lightgreen')
-        self.main_label.setVisible(True)
-        self.stacked_layout.addWidget(self.main_label)
-
         self.graph_list = graph.GraphList(period_s, graph_height)
-        self.stacked_layout.addWidget(self.graph_list.widget)
+        self.main_layout.addRow(self.graph_list.graph_layout)
 
         self.notify_label = QLabel("")
         self.notify_label.setFont(QFont('Monospace', 30))
@@ -67,7 +56,8 @@ class Window(QMainWindow):
         self.main_layout.addRow(self.notify_label)
 
     def set_main_label_text(self, text: str) -> None:
-        self.main_label.setText(text)
+        pass
+        # self.main_label.setText(text)
         #logging.debug(self.central_widget.geometry().size().height())
         #logging.debug(self.main_layout.totalMinimumSize().height())
         #logging.debug(self.main_layout.sizeConstraint().)

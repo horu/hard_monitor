@@ -24,7 +24,7 @@ def create_graph(graph_height: int) -> pg.PlotWidget:
     graph: pg.PlotItem = pg.PlotWidget()
     graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
     graph.setFixedHeight(graph_height)
-    graph.setFixedWidth(SYMBOL_WEIGHT)
+    #graph.setFixedWidth(SYMBOL_WEIGHT)
 
     graph.hideAxis('bottom')
     graph.hideAxis('left')
@@ -62,9 +62,6 @@ class Plot:
 
             self.values = []
 
-    def update_graph(self, y_min):
-        self.impl.setFillLevel(y_min)
-
     def get_y_max(self, initial):
         return self.y.max(initial=initial)
 
@@ -77,7 +74,6 @@ class Graph:
         self.x_limit = int(Graph.TIME_S / self.sum_value / period_s)
         self.x = np.arange(0, self.x_limit, dtype=int)
         self.impl = create_graph(graph_height)
-        self.graph_width = 0
 
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * TRANSPARENCY), fill_level=0):
         x = []
@@ -90,45 +86,97 @@ class Graph:
         )
         return Plot(plot_impl, self.x, self.sum_value)
 
-    def update_graph(self, width: int, y_min, y_max):
-        if not self.graph_width:
-            self.graph_width = width
-            self.impl.setFixedWidth(SYMBOL_WEIGHT * self.graph_width)
-            self.impl.getViewBox().setYRange(y_min, y_max * self.sum_value, padding=0)
-            self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+    def set_x_range(self):
+        self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
 
-class Cpu(Graph):
+class Label:
     def __init__(self, *args, **kwargs):
-        Graph.__init__(self, *args, **kwargs)
-        self.plot = self.create_plot()
+        self.impl = QLabel("")
+        self.impl.setFont(QFont('Monospace', 10))
+        self.impl.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        self.impl.setStyleSheet('background-color: rgba(0,0,0,0%); color: lightgreen')
+        self.impl.setVisible(True)
+
+        self.graph = Graph(*args, **kwargs)
+
+        self.stacked_layout = QStackedLayout()
+        self.stacked_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
+
+        self.graph_layout = QHBoxLayout()
+        self.graph_layout.setSpacing(0)
+        self.graph_layout.setContentsMargins(0, 0, 0, 0)
+        self.graph_layout.setAlignment(Qt.AlignLeft)
+
+        self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
+        self.graph_layout.addWidget(self.graph.impl)
+        self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignRight)
+
+        self.graph_widget = create_widget()
+        self.graph_widget.setLayout(self.graph_layout)
+
+        self.stacked_layout.addWidget(self.graph_widget)
+        self.stacked_layout.addWidget(self.impl)
+
+        self.range_is_set = False
+
+    def set_y_range(self, y_min, y_max):
+        if not self.range_is_set:
+            self.graph.impl.getViewBox().setYRange(y_min, y_max * self.graph.sum_value, padding=0)
+            self.graph.set_x_range()
+            self.range_is_set = True
+
+    def set_y_log_range(self, y_min, y_max):
+        if not self.range_is_set:
+            self.graph.impl.setLogMode(y=True)
+            self.graph.impl.getViewBox().setYRange(y_min, y_max, padding=0)
+            self.graph.set_x_range()
+            self.range_is_set = True
+
+    def update(self, text: str):
+        self.impl.setText(text)
+
+
+class DefaultLabel:
+    def __init__(self, *args, **kwargs):
+        self.label = Label(*args, **kwargs)
+        self.label.set_y_range(0, 0)
+
+    def update(self, info):
+        self.label.update(str(info))
+
+
+class Cpu:
+    def __init__(self, *args, **kwargs):
+        self.label = Label(*args, **kwargs)
+        self.plot = self.label.graph.create_plot()
 
     def update(self, cpu: hard_monitor.Cpu):
-        self.update_graph(len(str(cpu)) - 3, 0, cpu.cpu_count)
-
+        self.label.update(str(cpu))
+        self.label.set_y_range(0, cpu.cpu_count)
         self.plot.add_value(cpu.loadavg_current)
 
 
-class Gpu(Graph):
+class Gpu:
     def __init__(self, *args, **kwargs):
-        Graph.__init__(self, *args, **kwargs)
-        self.plot = self.create_plot()
+        self.label = Label(*args, **kwargs)
+        self.plot = self.label.graph.create_plot()
 
     def update(self, gpu: hard_monitor.Gpu):
-        self.update_graph(len(str(gpu)) - 2, 0, gpu.power1_cap_w)
-
+        self.label.update(str(gpu))
+        self.label.set_y_range(0, gpu.power1_cap_w)
         self.plot.add_value(gpu.power1_average_w)
 
 
-class Network(Graph):
+class Network:
     def __init__(self, *args, **kwargs):
-        Graph.__init__(self, *args, **kwargs)
-        self.impl.setLogMode(y=True)
-        self.recv_plot = self.create_plot(fill_level=-1)
-        self.send_plot = self.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY), fill_level=-1)
+        self.label = Label(*args, **kwargs)
+        self.label.set_y_log_range(-1, 1.3)
+        self.recv_plot = self.label.graph.create_plot(fill_level=-1)
+        self.send_plot = self.label.graph.create_plot(fill=pg.mkBrush(100, 100, 255, 255 * TRANSPARENCY), fill_level=-1)
 
     def update(self, net: hard_monitor.Network):
-        self.update_graph(len(str(net)) - 3, -1, 1.3 / self.sum_value)
+        self.label.update(str(net))
 
         self.recv_plot.add_value(net.recv_mbps)
         self.send_plot.add_value(net.send_mbps)
@@ -137,33 +185,32 @@ class Network(Graph):
 class GraphList:
 
     def __init__(self, period_s: float, graph_height: int):
-        self.widget = create_widget()
+        self.period_s = period_s
+        self.graph_height = graph_height
 
         self.graph_layout = QHBoxLayout()
         self.graph_layout.setSpacing(0)
         self.graph_layout.setContentsMargins(0, 0, 0, 0)
         self.graph_layout.setAlignment(Qt.AlignLeft)
 
-        self.widget.setLayout(self.graph_layout)
+        self.cpu = self._create_label(Cpu)
+        self.memory = self._create_label(DefaultLabel)
+        self.gpu = self._create_label(Gpu)
+        self.network = self._create_label(Network)
+        self.disk = self._create_label(DefaultLabel)
+        self.battery = self._create_label(DefaultLabel)
+        self.common = self._create_label(DefaultLabel)
+        self.top_process = self._create_label(DefaultLabel)
 
-        self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
-
-        self.cpu_graph = Cpu(period_s, graph_height)
-        self.graph_layout.addWidget(self.cpu_graph.impl, alignment=Qt.AlignLeft)
-
-        self.graph_layout.addWidget(create_empty_label(17), alignment=Qt.AlignLeft)
-
-        self.gpu_graph = Gpu(period_s, graph_height)
-        self.graph_layout.addWidget(self.gpu_graph.impl, alignment=Qt.AlignLeft)
-
-        self.graph_layout.addWidget(create_empty_label(3), alignment=Qt.AlignLeft)
-
-        self.network_graph = Network(period_s, graph_height)
-        self.graph_layout.addWidget(self.network_graph.impl, alignment=Qt.AlignLeft)
-
-        self.graph_layout.addWidget(create_empty_label(1), stretch=1)
+    def _create_label(self, label_type):
+        label = label_type(self.period_s, self.graph_height)
+        self.graph_layout.addLayout(label.label.stacked_layout)
+        return label
 
     def update(self, info: hard_monitor.HardMonitorInfo):
-        self.cpu_graph.update(info.cpu)
-        self.gpu_graph.update(info.gpu)
-        self.network_graph.update(info.network)
+        for attr, value in info.__dict__.items():
+            if attr == 'alarms':
+                continue
+
+            label = getattr(self, attr)
+            label.update(value)
