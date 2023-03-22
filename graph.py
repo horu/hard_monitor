@@ -22,15 +22,14 @@ def create_widget() -> QWidget:
     return widget
 
 
-def create_graph(graph_height: int) -> pg.PlotWidget:
+def create_graph(graph_height: int) -> pg.PlotItem:
     graph: pg.PlotItem = pg.PlotWidget()
     graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
     graph.setFixedHeight(graph_height)
 
     graph.hideAxis('bottom')
     graph.hideAxis('left')
-    graph.getViewBox().autoRange(padding=0)
-    graph.getViewBox().setYRange(0, 0)
+    graph.hideButtons()
 
     return graph
 
@@ -45,19 +44,21 @@ def create_empty_label(size_symbols: int, trans: float = TRANSPARENCY):
 
 
 class Plot:
-    def __init__(self, impl: pg.PlotDataItem, x: np.array, values_size: int):
+    def __init__(self, impl: pg.PlotDataItem, x: np.array, values_size: int, y_min):
         self.impl = impl
         self.x = x
         self.values_size = values_size
 
         self.values = []
-        self.y = np.zeros(np.size(self.x))
+        self.y_min = y_min
+        self.y = np.full(np.size(self.x), self.y_min)
 
     def add_value(self, value):
         self.values.append(value)
 
         if len(self.values) >= self.values_size:
-            self.y = np.append(self.y, sum(self.values))
+            y_value = max(sum(self.values), self.y_min)
+            self.y = np.append(self.y, y_value)
             self.y = np.delete(self.y, 0)
             self.impl.setData(x=self.x, y=self.y)
 
@@ -68,11 +69,12 @@ class Plot:
 
 
 class GraphConfig:
-    def __init__(self, period_s: float, graph_height: int, sum_value: int = 2, total_time_s: int = 600):
+    def __init__(self, period_s: float, graph_height: int, sum_value: int = 2, total_time_s: int = 600, y_min=0.0001):
         self.period_s = period_s
         self.graph_height = graph_height
         self.sum_value = sum_value
         self.total_time_s = total_time_s
+        self.y_min = y_min
 
 
 class Graph:
@@ -82,19 +84,36 @@ class Graph:
         self.x = np.arange(0, self.x_limit, dtype=int)
         self.impl = create_graph(self.config.graph_height)
 
+        self.range_is_set = False
+
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * GRAPH_TR), fill_level=0):
         x = []
         y = []
 
         plot_impl: pg.PlotDataItem = self.impl.plot(
-            x, y, pen=pg.mkPen(0, 0, 0, 0),
+            x=x,
+            y=y,
+            pen=pg.mkPen(0, 0, 0, 0),
             fillBrush=fill,
             fillLevel=fill_level,
         )
-        return Plot(plot_impl, self.x, self.config.sum_value)
+        return Plot(plot_impl, self.x, self.config.sum_value, self.config.y_min)
 
     def set_x_range(self):
         self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+
+    def set_y_range(self, y_min, y_max):
+        if not self.range_is_set:
+            self.impl.getViewBox().setYRange(y_min, y_max * self.config.sum_value, padding=0)
+            self.set_x_range()
+            self.range_is_set = True
+
+    def set_y_log_range(self, y_min, y_max):
+        if not self.range_is_set:
+            self.impl.setLogMode(x=False, y=True)
+            self.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.config.sum_value), padding=0)
+            self.set_x_range()
+            self.range_is_set = True
 
 
 class Label:
@@ -125,20 +144,11 @@ class Label:
         self.stacked_layout.addWidget(self.graph_widget)
         self.stacked_layout.addWidget(self.impl)
 
-        self.range_is_set = False
+    def set_y_range(self, *args, **kwargs):
+        self.graph.set_y_range(*args, **kwargs)
 
-    def set_y_range(self, y_min, y_max):
-        if not self.range_is_set:
-            self.graph.impl.getViewBox().setYRange(y_min, y_max * self.graph.config.sum_value, padding=0)
-            self.graph.set_x_range()
-            self.range_is_set = True
-
-    def set_y_log_range(self, y_min, y_max):
-        if not self.range_is_set:
-            self.graph.impl.setLogMode(y=True)
-            self.graph.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.graph.config.sum_value), padding=0)
-            self.graph.set_x_range()
-            self.range_is_set = True
+    def set_y_log_range(self, *args, **kwargs):
+        self.graph.set_y_log_range(*args, **kwargs)
 
     def update(self, text: str):
         self.impl.setText(text)
