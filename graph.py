@@ -9,6 +9,7 @@ import pyqtgraph as pg
 
 import hard_monitor
 
+FONT_SIZE = 10
 TRANSPARENCY = 0.7
 GRAPH_TR = 0.5
 HEIGHT = 17
@@ -39,7 +40,7 @@ def create_graph(graph_height: int) -> pg.PlotWidget:
 
 def create_empty_label(size_symbols: int):
     label = QLabel(' ' * size_symbols)
-    label.setFont(QFont('Monospace', 10))
+    label.setFont(QFont('Monospace', FONT_SIZE))
     label.setStyleSheet('background-color: rgba(0,0,0,{}%)'.format(int(TRANSPARENCY * 100)))
     label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     label.setVisible(True)
@@ -102,7 +103,7 @@ class Graph:
 class Label:
     def __init__(self, *args, **kwargs):
         self.impl = QLabel("")
-        self.impl.setFont(QFont('Monospace', 10))
+        self.impl.setFont(QFont('Monospace', FONT_SIZE))
         self.impl.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         self.impl.setStyleSheet('background-color: rgba(0,0,0,0%); color: lightgreen')
         self.impl.setVisible(True)
@@ -115,7 +116,7 @@ class Label:
         self.graph_layout = QHBoxLayout()
         self.graph_layout.setSpacing(0)
         self.graph_layout.setContentsMargins(0, 0, 0, 0)
-        self.graph_layout.setAlignment(Qt.AlignLeft)
+        self.graph_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
         self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
         self.graph_layout.addWidget(self.graph.impl)
@@ -236,7 +237,7 @@ class GraphList:
         self.graph_layout = QHBoxLayout()
         self.graph_layout.setSpacing(0)
         self.graph_layout.setContentsMargins(0, 0, 0, 0)
-        self.graph_layout.setAlignment(Qt.AlignLeft)
+        self.graph_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
 
         self.cpu = self._create_label(Cpu, first=True)
         self.memory = self._create_label(Memory)
@@ -249,7 +250,9 @@ class GraphList:
 
     def _create_label(self, label_type, first=False):
         if not first:
-            self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
+            empty_label = create_empty_label(1)
+            empty_label.setFixedHeight(self.config.graph_height)
+            self.graph_layout.addWidget(empty_label, alignment=Qt.AlignLeft | Qt.AlignTop)
         label = label_type(self.config)
         self.graph_layout.addLayout(label.label.stacked_layout)
         return label

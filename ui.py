@@ -112,6 +112,7 @@ class Backend:
         self.test_notify_timer.stop()
 
     def print(self):
+        self.reset_geometry()
         info = self.hard_monitor.get_info()
         self.window.graph_list.update(info)
 
@@ -119,7 +120,6 @@ class Backend:
             self.window.notify(' '.join(info.alarms))
         else:
             self.window.notify(None)
-        self.reset_geometry()
 
     def reset_geometry(self):
         monitor = QDesktopWidget().screenGeometry(0)
