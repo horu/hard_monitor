@@ -15,6 +15,7 @@ import netifaces
 import socket
 import array
 import subprocess
+import bleak
 
 
 class Wlan:
@@ -368,8 +369,8 @@ class Common:
         self.date_time = datetime.datetime.now()
         self.hour_utc = datetime.datetime.now(datetime.timezone.utc).hour
         self.hour_msc = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3))).hour
-        self.keyboard_layout = '**'
 
+        self.keyboard_layout = '**'
         try:
             output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
             if b'1' in output:
@@ -379,13 +380,16 @@ class Common:
         except:
             pass
 
+        self.vpn_connected = any('ppp' in iface for iface in netifaces.interfaces())
+
     def __str__(self):
-        return '[{} {:02}/{:02}/{} {}]'.format(
+        return '[{} {:02}/{:02}/{} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
             self.hour_msc,
             self.date_time.strftime("%H:%M:%S"),
             self.keyboard_layout,
+            'V' if self.vpn_connected else ' ',
         )
 
 
