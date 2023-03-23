@@ -255,7 +255,6 @@ class Disk:
 class Battery:
     def __init__(self, config: GraphConfig):
         battary_dur_multiplier = 12
-        config = copy.deepcopy(config)
         config.sum_value = config.sum_value * battary_dur_multiplier
         config.total_time_s = config.total_time_s * battary_dur_multiplier
 
@@ -302,7 +301,7 @@ class GraphList:
             empty_label = create_empty_label(1, trans=0)
             empty_label.setFixedHeight(self.config.graph_height)
             self.graph_layout.addWidget(empty_label, alignment=Qt.AlignLeft | Qt.AlignTop)
-        label = label_type(self.config)
+        label = label_type(copy.deepcopy(self.config))
         self.graph_layout.addLayout(label.label.stacked_layout)
         return label
 
