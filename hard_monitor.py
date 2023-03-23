@@ -389,11 +389,12 @@ class Common:
         if not Common.BT_SYS_PATH.exists():
             return False
 
-        bt_dev_list = [dev for dev in Common.BT_SYS_PATH.iterdir()]
-        for dev in bt_dev_list:
-            for dev_other in bt_dev_list:
-                if dev.name != dev_other.name and dev.name in dev_other.name:
-                    return True
+        for dev in Common.BT_SYS_PATH.iterdir():
+            uevent = dev / 'uevent'
+            if uevent.exists() and uevent.is_file():
+                with uevent.open('r') as file:
+                    if 'DEVTYPE=link' in file.readline():
+                        return True
         return False
 
     def __str__(self):
