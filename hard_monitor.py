@@ -95,6 +95,8 @@ class Battery:
                 self.voltage_min_design_v = int(file.readline()) / 1000000
             with (Battery.BAT_PATH / 'charge_now').open('r') as file:
                 self.charge_now_ah = int(file.readline()) / 1000000
+            with (Battery.BAT_PATH / 'charge_full').open('r') as file:
+                self.charge_full_ah = int(file.readline()) / 1000000
             with (Battery.BAT_PATH / 'current_now').open('r') as file:
                 self.current_now_a = int(file.readline()) / 1000000
             with (Battery.BAT_PATH / 'status').open('r') as file:
@@ -106,11 +108,17 @@ class Battery:
             self.current_now_a = 0
             self.charge_status = False
 
-    def __str__(self):
-        power_w = self.voltage_now_v * self.current_now_a
-        capacity_wh = self.charge_now_ah * self.voltage_min_design_v
+        self.power_w = self.voltage_now_v * self.current_now_a
+        self.charge_now_wh = self.charge_now_ah * self.voltage_min_design_v
+        self.charge_full_wh = self.charge_full_ah * self.voltage_min_design_v
 
-        return '[{}{:2} W {:4} Wh]'.format('+' if self.charge_status else ' ', round(power_w), round(capacity_wh, 1))
+    def __str__(self):
+
+        return '[{}{:2} W {:4} Wh]'.format(
+            '+' if self.charge_status else ' ',
+            round(self.power_w),
+            round(self.charge_now_wh, 1),
+        )
 
 
 class Cpu:

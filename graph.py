@@ -1,3 +1,5 @@
+import copy
+
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont, QMouseEvent
@@ -67,6 +69,13 @@ class Plot:
     def get_y_max(self, initial):
         return self.y.max(initial=initial)
 
+    def set_fill_level(self, fill_level):
+        self.impl.setFillLevel(fill_level * self.values_size)
+
+    def override_all_y(self, y_value):
+        self.y = np.full(np.size(self.x), y_value * self.values_size)
+        self.impl.setData(x=self.x, y=self.y)
+
 
 class GraphConfig:
     def __init__(self, period_s: float, graph_height: int, sum_value: int = 2, total_time_s: int = 600, y_min=0.0001):
@@ -86,7 +95,7 @@ class Graph:
 
         self.range_is_set = False
 
-    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * GRAPH_TR), fill_level=0):
+    def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * GRAPH_TR), fill_level=0) -> Plot:
         x = []
         y = []
 
@@ -107,6 +116,8 @@ class Graph:
             self.impl.getViewBox().setYRange(y_min, y_max * self.config.sum_value, padding=0)
             self.set_x_range()
             self.range_is_set = True
+            return True
+        return False
 
     def set_y_log_range(self, y_min, y_max):
         if not self.range_is_set:
@@ -114,6 +125,8 @@ class Graph:
             self.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.config.sum_value), padding=0)
             self.set_x_range()
             self.range_is_set = True
+            return True
+        return False
 
 
 class Label:
@@ -145,10 +158,10 @@ class Label:
         self.stacked_layout.addWidget(self.impl)
 
     def set_y_range(self, *args, **kwargs):
-        self.graph.set_y_range(*args, **kwargs)
+        return self.graph.set_y_range(*args, **kwargs)
 
     def set_y_log_range(self, *args, **kwargs):
-        self.graph.set_y_log_range(*args, **kwargs)
+        return self.graph.set_y_log_range(*args, **kwargs)
 
     def update(self, text: str):
         self.impl.setText(text)
@@ -177,12 +190,14 @@ class Cpu:
 class Memory:
     def __init__(self, *args, **kwargs):
         self.label = Label(*args, **kwargs)
-        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * GRAPH_TR / 4))
+        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * GRAPH_TR / 3))
         self.used_plot = self.label.graph.create_plot()
 
     def update(self, memory: hard_monitor.Memory):
         self.label.update(str(memory))
-        self.label.set_y_range(0, memory.total_gb)
+        if self.label.set_y_range(0, memory.total_gb):
+            self.cache_plot.override_all_y(memory.used_gb + memory.cached_gb + memory.buffers_gb)
+            self.used_plot.override_all_y(memory.used_gb)
         self.used_plot.add_value(memory.used_gb)
         self.cache_plot.add_value(memory.used_gb + memory.cached_gb + memory.buffers_gb)
 
@@ -236,6 +251,25 @@ class Disk:
         self.read_plot.add_value(disk.read_mbps)
 
 
+class Battery:
+    def __init__(self, config: GraphConfig):
+        battary_dur_multiplier = 12
+        config = copy.deepcopy(config)
+        config.sum_value = config.sum_value * battary_dur_multiplier
+        config.total_time_s = config.total_time_s * battary_dur_multiplier
+
+        self.label = Label(config)
+        self.plot = self.label.graph.create_plot()
+
+    def update(self, battery: hard_monitor.Battery):
+        self.label.update(str(battery))
+        if self.label.set_y_range(0, battery.charge_full_wh):
+            self.plot.set_fill_level(battery.charge_full_wh)
+            self.plot.override_all_y(battery.charge_now_wh)
+
+        self.plot.add_value(battery.charge_now_wh)
+
+
 class GraphList:
 
     def __init__(self, config: GraphConfig):
@@ -251,7 +285,7 @@ class GraphList:
         self.gpu = self._create_label(Gpu)
         self.network = self._create_label(Network)
         self.disk = self._create_label(Disk)
-        self.battery = self._create_label(DefaultLabel)
+        self.battery = self._create_label(Battery)
         self.common = self._create_label(DefaultLabel)
         self.top_process = self._create_label(DefaultLabel)
 
