@@ -262,10 +262,15 @@ class Battery:
         self.label = Label(config)
         self.plot = self.label.graph.create_plot()
 
+        self.charge_full_wh = 0
+
     def update(self, battery: hard_monitor.Battery):
         self.label.update(str(battery))
+        if self.charge_full_wh != battery.charge_full_wh:
+            self.charge_full_wh = battery.charge_full_wh
+            self.plot.set_fill_level(self.charge_full_wh)
+
         if self.label.set_y_range(0, battery.charge_full_wh):
-            self.plot.set_fill_level(battery.charge_full_wh)
             self.plot.override_all_y(battery.charge_now_wh)
 
         self.plot.add_value(battery.charge_now_wh)
