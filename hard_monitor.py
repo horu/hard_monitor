@@ -365,6 +365,8 @@ class Disk:
 
 
 class Common:
+    BT_SYS_PATH = pathlib.Path('/sys/class/bluetooth')
+
     def __init__(self):
         self.date_time = datetime.datetime.now()
         self.hour_utc = datetime.datetime.now(datetime.timezone.utc).hour
@@ -381,15 +383,28 @@ class Common:
             pass
 
         self.vpn_connected = any('ppp' in iface for iface in netifaces.interfaces())
+        self.bt_connected = self._check_bt()
+
+    def _check_bt(self) -> bool:
+        if not Common.BT_SYS_PATH.exists():
+            return False
+
+        bt_dev_list = [dev for dev in Common.BT_SYS_PATH.iterdir()]
+        for dev in bt_dev_list:
+            for dev_other in bt_dev_list:
+                if dev.name != dev_other.name and dev.name in dev_other.name:
+                    return True
+        return False
 
     def __str__(self):
-        return '[{} {:02}/{:02}/{} {} {}]'.format(
+        return '[{} {:02}/{:02}/{} {} {}{}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
             self.hour_msc,
             self.date_time.strftime("%H:%M:%S"),
             self.keyboard_layout,
             'V' if self.vpn_connected else ' ',
+            'B' if self.bt_connected else ' ',
         )
 
 
