@@ -49,7 +49,7 @@ class Window(QMainWindow):
         self.main_layout.addRow(self.graph_list.graph_layout)
 
         self.notify_label = QLabel("")
-        self.notify_label.setFont(QFont('Monospace', 30))
+        self.notify_label.setFont(QFont('Monospace', 40))
         self.notify_label.setAlignment(Qt.AlignCenter)
         self.notify_label.setStyleSheet('background-color: rgba(0,0,0,0%); color: rgb(255,0,0)')
         self.notify_label.setVisible(False)
@@ -137,7 +137,7 @@ if __name__ == "__main__":
                         help='File to save pid.')
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
     parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
-    parser.add_argument('-g', '--graph_height', type=int, default=18, help='Location height of graph pixels')
+    parser.add_argument('-g', '--graph_height', type=int, default=17, help='Location height of graph pixels')
     parser.add_argument('-t', '--graph_time', type=int, default=600, help='Total graph timeline sec')
     args = parser.parse_args()
 

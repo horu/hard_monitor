@@ -376,9 +376,9 @@ class Common:
         try:
             output = subprocess.check_output('xset -q | grep -A 0 \'LED\' | cut -c59-67', shell=True)
             if b'1' in output:
-                self.keyboard_layout = 'ru'
+                self.keyboard_layout = 'RU'
             else:
-                self.keyboard_layout = 'en'
+                self.keyboard_layout = 'EN'
         except:
             pass
 

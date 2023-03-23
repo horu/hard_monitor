@@ -269,7 +269,7 @@ class Battery:
 
         if self.label.set_y_range(0, battery.charge_full_wh):
             self.plot.override_all_y(battery.charge_now_wh)
-            
+
         if self.charge_full_wh != battery.charge_full_wh:
             self.charge_full_wh = battery.charge_full_wh
             self.plot.set_fill_level(self.charge_full_wh)
