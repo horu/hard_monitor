@@ -126,7 +126,7 @@ class Cpu:
     TEMP_SENSOR_NAME = 'k10temp'
     TEMP_CRIT_C = 90
 
-    def __init__(self):
+    def __init__(self, period_s: float):
         self.cpu_count = psutil.cpu_count()
 
         self.cpu_counters = psutil.cpu_times()
@@ -134,14 +134,21 @@ class Cpu:
 
         self.loadavg_current = 0
         self.loadavg_1m = 0
-        self.freq_list_ghz = []
         self.temp_c = 0
 
         self.alarm = None
 
-    def calculate(self):
-        self.freq_list_ghz = self._get_freq_list()
+        # take readings for graq list inside another thread to prevent any affects to cpy freq
+        self.period_s = period_s
+        self.stopping = threading.Event()
+        self.freq_list_theead = threading.Thread(target=self._take_freq_list)
+        self.freq_list_theead.start()
+        self.freq_list_ghz = []
 
+    def stop(self):
+        self.stopping.set()
+
+    def calculate(self):
         cpu_counters_prev = self.cpu_counters
         counters_time_prev = self.counters_time
 
@@ -164,21 +171,26 @@ class Cpu:
 
         self.alarm = create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
 
-    def _get_freq_list(self) -> typing.List[float]:
-        time.sleep(0.05)
-        freqs = psutil.cpu_freq(percpu=True)
-        freqs_cur = sorted(freq.current for freq in freqs)
-        freq_list_size = 4
-        freq_list = []
-        el_size = len(freqs_cur) / freq_list_size
+    def _take_freq_list(self) -> None:
+        while not self.stopping.is_set():
+            try:
+                # sleep before psutil.cpu_freq call
+                time.sleep(self.period_s)
+                freqs = psutil.cpu_freq(percpu=True)
+                freqs_cur = sorted(freq.current for freq in freqs)
+                freq_list_size = 4
+                freq_list = []
+                el_size = len(freqs_cur) / freq_list_size
 
-        el_sum = 0
-        for i, f in enumerate(freqs_cur):
-            el_sum += f
-            if i % el_size == el_size - 1:
-                freq_list.append(el_sum / el_size)
                 el_sum = 0
-        return [f / 1000 for f in freq_list]
+                for i, f in enumerate(freqs_cur):
+                    el_sum += f
+                    if i % el_size == el_size - 1:
+                        freq_list.append(el_sum / el_size)
+                        el_sum = 0
+                self.freq_list_ghz = [f / 1000 for f in freq_list]
+            except:
+                pass
 
     def __str__(self):
         return '[{:4} {:4} ({}) Ghz {:2} °C]'.format(
@@ -452,11 +464,12 @@ class HardMonitorInfo:
 class HardMonitor:
     def __init__(self, period_s: float):
         sensors.init()
-        self.cpu = Cpu()
+        self.cpu = Cpu(period_s)
         self.network = Network(period_s)
         self.disk = Disk()
 
     def stop(self):
+        self.cpu.stop()
         self.network.stop()
 
     def update_counters(self):
