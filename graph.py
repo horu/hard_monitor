@@ -111,8 +111,8 @@ class Graph:
     def set_x_range(self):
         self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
-    def set_y_range(self, y_min, y_max):
-        if not self.range_is_set:
+    def set_y_range(self, y_min, y_max, force: bool = False):
+        if not self.range_is_set or force:
             self.impl.getViewBox().setYRange(y_min, y_max * self.config.sum_value, padding=0)
             self.set_x_range()
             self.range_is_set = True
@@ -266,12 +266,14 @@ class Battery:
 
     def update(self, battery: hard_monitor.Battery):
         self.label.update(str(battery))
-        if self.charge_full_wh != battery.charge_full_wh:
-            self.charge_full_wh = battery.charge_full_wh
-            self.plot.set_fill_level(self.charge_full_wh)
 
         if self.label.set_y_range(0, battery.charge_full_wh):
             self.plot.override_all_y(battery.charge_now_wh)
+            
+        if self.charge_full_wh != battery.charge_full_wh:
+            self.charge_full_wh = battery.charge_full_wh
+            self.plot.set_fill_level(self.charge_full_wh)
+            self.label.set_y_range(0, self.charge_full_wh, force=True)
 
         self.plot.add_value(battery.charge_now_wh)
 
