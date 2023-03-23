@@ -142,19 +142,20 @@ class Label:
         self.stacked_layout = QStackedLayout()
         self.stacked_layout.setStackingMode(QStackedLayout.StackingMode.StackAll)
 
-        self.graph_layout = QHBoxLayout()
-        self.graph_layout.setSpacing(0)
-        self.graph_layout.setContentsMargins(0, 0, 0, 0)
-        self.graph_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-
-        self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
-        self.graph_layout.addWidget(self.graph.impl)
-        self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignRight)
-
-        self.graph_widget = create_widget()
-        self.graph_widget.setLayout(self.graph_layout)
-
-        self.stacked_layout.addWidget(self.graph_widget)
+        # self.graph_layout = QHBoxLayout()
+        # self.graph_layout.setSpacing(0)
+        # self.graph_layout.setContentsMargins(0, 0, 0, 0)
+        # self.graph_layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
+        #
+        # self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignLeft)
+        # self.graph_layout.addWidget(self.graph.impl)
+        # self.graph_layout.addWidget(create_empty_label(1), alignment=Qt.AlignRight)
+        #
+        # self.graph_widget = create_widget()
+        # self.graph_widget.setLayout(self.graph_layout)
+        #
+        # self.stacked_layout.addWidget(self.graph_widget)
+        self.stacked_layout.addWidget(self.graph.impl)
         self.stacked_layout.addWidget(self.impl)
 
     def set_y_range(self, *args, **kwargs):
