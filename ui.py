@@ -137,7 +137,7 @@ if __name__ == "__main__":
                         help='File to save pid.')
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
     parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
-    parser.add_argument('-g', '--graph_height', type=int, default=20, help='Location height of graph pixels')
+    parser.add_argument('-g', '--graph_height', type=int, default=18, help='Location height of graph pixels')
     parser.add_argument('-t', '--graph_time', type=int, default=600, help='Total graph timeline sec')
     args = parser.parse_args()
 
