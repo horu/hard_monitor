@@ -218,16 +218,16 @@ class Cpu:
 class Memory:
     def __init__(self, *args, **kwargs):
         self.label = Label(*args, **kwargs)
-        self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * GRAPH_TR / 3))
+        # self.cache_plot = self.label.graph.create_plot(fill=pg.mkBrush(255, 255, 0, 255 * GRAPH_TR / 3))
         self.used_plot = self.label.graph.create_plot()
 
     def update(self, memory: hard_monitor.Memory):
         self.label.update(str(memory))
         if self.label.update_y_range(0, memory.total_gb):
-            self.cache_plot.override_all_y(memory.used_gb + memory.cached_gb + memory.buffers_gb)
+            # self.cache_plot.override_all_y(memory.used_gb + memory.cached_gb + memory.buffers_gb)
             self.used_plot.override_all_y(memory.used_gb)
         self.used_plot.add_value(memory.used_gb)
-        self.cache_plot.add_value(memory.used_gb + memory.cached_gb + memory.buffers_gb)
+        # self.cache_plot.add_value(memory.used_gb + memory.cached_gb + memory.buffers_gb)
 
 
 class Gpu:
