@@ -139,6 +139,7 @@ if __name__ == "__main__":
     parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
     parser.add_argument('-g', '--graph_height', type=int, default=17, help='Location height of graph pixels')
     parser.add_argument('-t', '--graph_time', type=int, default=600, help='Total graph timeline sec')
+    parser.add_argument('-d', '--graph_debug', action='store_true', help='Debug output for graph')
     args = parser.parse_args()
 
     if args.pidfile:
@@ -161,6 +162,7 @@ if __name__ == "__main__":
         period_s=args.period,
         graph_height=args.graph_height,
         total_time_s=args.graph_time,
+        debug=args.graph_debug,
     )
 
     win = Window(default_graph_config)

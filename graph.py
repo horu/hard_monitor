@@ -15,25 +15,11 @@ FONT_SIZE = 10
 TRANSPARENCY = 0.7
 GRAPH_TR = 0.5
 
-TEST = 0
-
 
 def create_widget() -> QWidget:
     widget = QWidget()
     widget.setStyleSheet('background-color: rgba(0,0,0,0%)')
     return widget
-
-
-def create_graph(graph_height: int) -> pg.PlotItem:
-    graph: pg.PlotItem = pg.PlotWidget()
-    graph.setBackground((0, 255 if TEST else 0, 0, 255 * TRANSPARENCY))
-    graph.setFixedHeight(graph_height)
-
-    graph.hideAxis('bottom')
-    graph.hideAxis('left')
-    graph.hideButtons()
-
-    return graph
 
 
 def create_empty_label(size_symbols: int, trans: float = TRANSPARENCY):
@@ -46,10 +32,10 @@ def create_empty_label(size_symbols: int, trans: float = TRANSPARENCY):
 
 
 class Plot:
-    def __init__(self, impl: pg.PlotDataItem, x: np.array, values_size: int, y_min):
+    def __init__(self, impl: pg.PlotDataItem, x: np.array, accum_size: int, y_min):
         self.impl = impl
         self.x = x
-        self.values_size = values_size
+        self.accum_size = accum_size
 
         self.values = []
         self.y_min = y_min
@@ -58,8 +44,8 @@ class Plot:
     def add_value(self, value):
         self.values.append(value)
 
-        if len(self.values) >= self.values_size:
-            y_value = max(sum(self.values), self.y_min)
+        if len(self.values) >= self.accum_size:
+            y_value = max(sum(self.values) / self.accum_size, self.y_min)
             self.y = np.append(self.y, y_value)
             self.y = np.delete(self.y, 0)
             self.impl.setData(x=self.x, y=self.y)
@@ -70,28 +56,36 @@ class Plot:
         return self.y.max(initial=initial)
 
     def set_fill_level(self, fill_level):
-        self.impl.setFillLevel(fill_level * self.values_size)
+        self.impl.setFillLevel(fill_level)
 
     def override_all_y(self, y_value):
-        self.y = np.full(np.size(self.x), y_value * self.values_size)
+        self.y = np.full(np.size(self.x), y_value)
         self.impl.setData(x=self.x, y=self.y)
 
 
 class GraphConfig:
-    def __init__(self, period_s: float, graph_height: int, sum_value: int = 2, total_time_s: int = 600, y_min=0.0001):
+    def __init__(
+            self,
+            period_s: float,
+            graph_height: int,
+            accum_size: int = 2,
+            total_time_s: int = 600,
+            y_min: float=0.0001,
+            debug: bool = False):
         self.period_s = period_s
         self.graph_height = graph_height
-        self.sum_value = sum_value
+        self.accum_size = accum_size
         self.total_time_s = total_time_s
         self.y_min = y_min
+        self.debug = debug
 
 
 class Graph:
     def __init__(self, config: GraphConfig):
         self.config = config
-        self.x_limit = int(self.config.total_time_s / self.config.sum_value / self.config.period_s)
+        self.x_limit = int(self.config.total_time_s / self.config.accum_size / self.config.period_s)
         self.x = np.arange(0, self.x_limit, dtype=int)
-        self.impl = create_graph(self.config.graph_height)
+        self.impl = self._create_graph()
 
         self.range_is_set = False
 
@@ -106,14 +100,14 @@ class Graph:
             fillBrush=fill,
             fillLevel=fill_level,
         )
-        return Plot(plot_impl, self.x, self.config.sum_value, self.config.y_min)
+        return Plot(plot_impl, self.x, self.config.accum_size, self.config.y_min)
 
     def set_x_range(self):
         self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
 
     def set_y_range(self, y_min, y_max, force: bool = False):
         if not self.range_is_set or force:
-            self.impl.getViewBox().setYRange(y_min, y_max * self.config.sum_value, padding=0)
+            self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
             self.set_x_range()
             self.range_is_set = True
             return True
@@ -122,11 +116,23 @@ class Graph:
     def set_y_log_range(self, y_min, y_max):
         if not self.range_is_set:
             self.impl.setLogMode(x=False, y=True)
-            self.impl.getViewBox().setYRange(y_min, y_max + math.log10(self.config.sum_value), padding=0)
+            self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
             self.set_x_range()
             self.range_is_set = True
             return True
         return False
+
+    def _create_graph(self) -> pg.PlotItem:
+        graph: pg.PlotItem = pg.PlotWidget()
+        graph.setBackground((0, 50 if self.config.debug else 0, 0, 255 * TRANSPARENCY))
+        graph.setFixedHeight(self.config.graph_height)
+
+        graph.hideAxis('bottom')
+        if not self.config.debug:
+            graph.hideAxis('left')
+        graph.hideButtons()
+
+        return graph
 
 
 class Label:
@@ -255,7 +261,7 @@ class Disk:
 class Battery:
     def __init__(self, config: GraphConfig):
         battary_dur_multiplier = 12
-        config.sum_value = config.sum_value * battary_dur_multiplier
+        config.accum_size = config.accum_size * battary_dur_multiplier
         config.total_time_s = config.total_time_s * battary_dur_multiplier
 
         self.label = Label(config)
