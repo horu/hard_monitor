@@ -172,23 +172,31 @@ class Cpu:
         self.alarm = create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
 
     def _take_freq_list(self) -> None:
+        count = 5
+        freq_list_size = 4
+
         while not self.stopping.is_set():
             try:
                 # sleep before psutil.cpu_freq call
-                time.sleep(self.period_s)
-                freqs = psutil.cpu_freq(percpu=True)
-                freqs_cur = sorted(freq.current for freq in freqs)
-                freq_list_size = 4
-                freq_list = []
-                el_size = len(freqs_cur) / freq_list_size
+                freq_list_min = [9999.9] * freq_list_size
+                for _ in range(0, count):
+                    time.sleep(self.period_s / count / 2)
+                    freqs = psutil.cpu_freq(percpu=True)
+                    freqs_cur = sorted(freq.current for freq in freqs)
+                    el_size = len(freqs_cur) / freq_list_size
 
-                el_sum = 0
-                for i, f in enumerate(freqs_cur):
-                    el_sum += f
-                    if i % el_size == el_size - 1:
-                        freq_list.append(el_sum / el_size)
-                        el_sum = 0
-                self.freq_list_ghz = [f / 1000 for f in freq_list]
+                    freq_list = []
+                    el_sum = 0
+                    for i, f in enumerate(freqs_cur):
+                        el_sum += f
+                        if i % el_size == el_size - 1:
+                            freq_list.append(el_sum / el_size)
+                            el_sum = 0
+
+                    for i, f in enumerate(freq_list):
+                        freq_list_min[i] = min(f, freq_list_min[i])
+
+                self.freq_list_ghz = [f / 1000 for f in freq_list_min]
             except:
                 pass
 
