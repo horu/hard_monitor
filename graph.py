@@ -87,7 +87,10 @@ class Graph:
         self.x = np.arange(0, self.x_limit, dtype=int)
         self.impl = self._create_graph()
 
-        self.range_is_set = False
+        # self.range_is_set = False
+
+        self.y_range_min = None
+        self.y_range_max = None
 
     def create_plot(self, fill=pg.mkBrush(255, 0, 0, 255 * GRAPH_TR), fill_level=0) -> Plot:
         x = []
@@ -102,23 +105,35 @@ class Graph:
         )
         return Plot(plot_impl, self.x, self.config.accum_size, self.config.y_min)
 
-    def set_x_range(self):
-        self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+    # def set_x_range(self):
+    #     self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+    #
+    # def set_y_range(self, y_min, y_max, force: bool = False):
+    #     if not self.range_is_set or force:
+    #         self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
+    #         self.set_x_range()
+    #         self.range_is_set = True
+    #         return True
+    #     return False
+    #
+    # def set_y_log_range(self, y_min, y_max):
+    #     if not self.range_is_set:
+    #         self.impl.setLogMode(x=False, y=True)
+    #         self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
+    #         self.set_x_range()
+    #         self.range_is_set = True
+    #         return True
+    #     return False
 
-    def set_y_range(self, y_min, y_max, force: bool = False):
-        if not self.range_is_set or force:
-            self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
-            self.set_x_range()
-            self.range_is_set = True
-            return True
-        return False
+    def set_log_mode(self, *args, **kwargs):
+        self.impl.setLogMode(*args, **kwargs)
 
-    def set_y_log_range(self, y_min, y_max):
-        if not self.range_is_set:
-            self.impl.setLogMode(x=False, y=True)
+    def update_y_range(self, y_min, y_max):
+        if self.y_range_min != y_min or self.y_range_max != y_max:
             self.impl.getViewBox().setYRange(y_min, y_max, padding=0)
-            self.set_x_range()
-            self.range_is_set = True
+            self.impl.getViewBox().setXRange(self.x[0], self.x[-1], padding=0)
+            self.y_range_min = y_min
+            self.y_range_max = y_max
             return True
         return False
 
@@ -164,11 +179,17 @@ class Label:
         self.stacked_layout.addWidget(self.graph.impl)
         self.stacked_layout.addWidget(self.impl)
 
-    def set_y_range(self, *args, **kwargs):
-        return self.graph.set_y_range(*args, **kwargs)
+    # def set_y_range(self, *args, **kwargs):
+    #     return self.graph.set_y_range(*args, **kwargs)
+    #
+    # def set_y_log_range(self, *args, **kwargs):
+    #     return self.graph.set_y_log_range(*args, **kwargs)
 
-    def set_y_log_range(self, *args, **kwargs):
-        return self.graph.set_y_log_range(*args, **kwargs)
+    def update_y_range(self, *args, **kwargs):
+        return self.graph.update_y_range(*args, **kwargs)
+
+    def set_log_mode(self, *args, **kwargs):
+        return self.graph.set_log_mode(*args, **kwargs)
 
     def update(self, text: str):
         self.impl.setText(text)
@@ -177,7 +198,7 @@ class Label:
 class DefaultLabel:
     def __init__(self, *args, **kwargs):
         self.label = Label(*args, **kwargs)
-        self.label.set_y_range(0, 0)
+        self.label.update_y_range(0, 0)
 
     def update(self, info):
         self.label.update(str(info))
@@ -190,7 +211,7 @@ class Cpu:
 
     def update(self, cpu: hard_monitor.Cpu):
         self.label.update(str(cpu))
-        self.label.set_y_range(0, cpu.cpu_count)
+        self.label.update_y_range(0, cpu.cpu_count)
         self.plot.add_value(cpu.loadavg_current)
 
 
@@ -202,7 +223,7 @@ class Memory:
 
     def update(self, memory: hard_monitor.Memory):
         self.label.update(str(memory))
-        if self.label.set_y_range(0, memory.total_gb):
+        if self.label.update_y_range(0, memory.total_gb):
             self.cache_plot.override_all_y(memory.used_gb + memory.cached_gb + memory.buffers_gb)
             self.used_plot.override_all_y(memory.used_gb)
         self.used_plot.add_value(memory.used_gb)
@@ -214,9 +235,14 @@ class Gpu:
         self.label = Label(*args, **kwargs)
         self.plot = self.label.graph.create_plot()
 
+        self.power_average_max_w = 0
+
     def update(self, gpu: hard_monitor.Gpu):
         self.label.update(str(gpu))
-        self.label.set_y_range(0, gpu.power1_cap_w)
+
+        # power1_cap_w can show invalid value
+        self.power_average_max_w = max(gpu.power1_cap_w, gpu.power1_average_w, self.power_average_max_w)
+        self.label.update_y_range(0, self.power_average_max_w)
         self.plot.add_value(gpu.power1_average_w)
 
 
@@ -226,7 +252,8 @@ class Network:
 
         y_min = -1  # 0.1 mbps
         y_max = 1  # 10 mbps
-        self.label.set_y_log_range(y_min, y_max)
+        self.label.set_log_mode(y=True)
+        self.label.update_y_range(y_min, y_max)
         self.recv_plot = self.label.graph.create_plot(fill_level=y_min)
         self.send_plot = self.label.graph.create_plot(
             fill=pg.mkBrush(100, 100, 255, 255 * GRAPH_TR),
@@ -245,7 +272,8 @@ class Disk:
 
         y_min = 0  # 1 mbps
         y_max = 2  # 100 mbps
-        self.label.set_y_log_range(y_min, y_max)
+        self.label.set_log_mode(y=True)
+        self.label.update_y_range(y_min, y_max)
         self.write_plot = self.label.graph.create_plot(fill_level=y_min)
         self.read_plot = self.label.graph.create_plot(
             fill=pg.mkBrush(100, 100, 255, 255 * GRAPH_TR),
@@ -260,25 +288,24 @@ class Disk:
 
 class Battery:
     def __init__(self, config: GraphConfig):
-        battary_dur_multiplier = 12
-        config.accum_size = config.accum_size * battary_dur_multiplier
-        config.total_time_s = config.total_time_s * battary_dur_multiplier
+        battery_dur_multiplier = 12
+        config.accum_size = config.accum_size * battery_dur_multiplier
+        config.total_time_s = config.total_time_s * battery_dur_multiplier
 
         self.label = Label(config)
         self.plot = self.label.graph.create_plot()
 
-        self.charge_full_wh = 0
+        self.first_update = True
 
     def update(self, battery: hard_monitor.Battery):
         self.label.update(str(battery))
 
-        if self.label.set_y_range(0, battery.charge_full_wh):
-            self.plot.override_all_y(battery.charge_now_wh)
+        if self.label.update_y_range(0, battery.charge_full_wh):
+            self.plot.set_fill_level(battery.charge_full_wh)
 
-        if self.charge_full_wh != battery.charge_full_wh:
-            self.charge_full_wh = battery.charge_full_wh
-            self.plot.set_fill_level(self.charge_full_wh)
-            self.label.set_y_range(0, self.charge_full_wh, force=True)
+        if self.first_update:
+            self.plot.override_all_y(battery.charge_now_wh)
+            self.first_update = False
 
         self.plot.add_value(battery.charge_now_wh)
 
