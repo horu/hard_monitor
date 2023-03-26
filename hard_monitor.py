@@ -476,7 +476,7 @@ class Common:
         self.bt = bt
 
     def __str__(self):
-        bt_status = 'B({:03})'.format(round(self.bt.bat_level, 1))
+        bt_status = 'B/{:03}'.format(round(self.bt.bat_level, 1))
         return '[{} {:02}/{:02}/{} {} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
