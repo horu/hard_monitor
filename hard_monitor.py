@@ -1,4 +1,5 @@
 import fcntl
+import logging
 import os
 import struct
 import threading
@@ -15,7 +16,71 @@ import netifaces
 import socket
 import array
 import subprocess
-import bleak
+import bluetooth_battery
+import bluetooth
+
+
+class Bluetooth:
+    BT_SYS_PATH = pathlib.Path('/sys/class/bluetooth')
+
+    def __init__(self, period_s: float):
+        self.connected = False
+        self.bat_level = 0
+
+        self.period_s = period_s
+        self.stopping = threading.Event()
+        self.freq_list_theead = threading.Thread(target=self._check_loop)
+        self.freq_list_theead.start()
+        self.freq_list_ghz = []
+
+    def stop(self):
+        self.stopping.set()
+
+    def _get_mac(self):
+        try:
+            return subprocess.check_output(
+                r"bluetoothctl info | grep Device | sed 's/Device \([:0-9A-F]\+\).*/\1/'",
+                shell=True,
+                text=True).splitlines()[0]
+        except:
+            pass
+        return None
+
+    def _check_loop(self):
+        while not self.stopping.is_set():
+            try:
+                connected = self._check_bt()
+                if connected and not self.connected:
+                    self.bat_level = self._get_bat_level()
+                self.connected = connected
+            except:
+                pass
+            time.sleep(self.period_s)
+
+    def _check_bt(self) -> bool:
+        if not Bluetooth.BT_SYS_PATH.exists():
+            return False
+
+        for dev in Bluetooth.BT_SYS_PATH.iterdir():
+            uevent = dev / 'uevent'
+            if uevent.exists() and uevent.is_file():
+                with uevent.open('r') as file:
+                    if 'DEVTYPE=link' in file.readline():
+                        return True
+        return False
+
+    def _get_bat_level(self):
+        result = 0
+        mac = self._get_mac()
+        try:
+            logging.debug(subprocess.check_output('bluetoothctl disconnect {}'.format(mac), shell=True, text=True))
+            b = bluetooth_battery.BatteryStateQuerier('{}'.format(mac), 1)
+            result = int(b)
+        except:
+            pass
+        if mac:
+            logging.debug(subprocess.check_output('bluetoothctl connect {}'.format(mac), shell=True, text=True))
+        return result
 
 
 class Wlan:
@@ -385,9 +450,7 @@ class Disk:
 
 
 class Common:
-    BT_SYS_PATH = pathlib.Path('/sys/class/bluetooth')
-
-    def __init__(self):
+    def __init__(self, bt: Bluetooth):
         self.date_time = datetime.datetime.now()
         self.hour_utc = datetime.datetime.now(datetime.timezone.utc).hour
         self.hour_msc = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3))).hour
@@ -403,29 +466,18 @@ class Common:
             pass
 
         self.vpn_connected = any('ppp' in iface for iface in netifaces.interfaces())
-        self.bt_connected = self._check_bt()
-
-    def _check_bt(self) -> bool:
-        if not Common.BT_SYS_PATH.exists():
-            return False
-
-        for dev in Common.BT_SYS_PATH.iterdir():
-            uevent = dev / 'uevent'
-            if uevent.exists() and uevent.is_file():
-                with uevent.open('r') as file:
-                    if 'DEVTYPE=link' in file.readline():
-                        return True
-        return False
+        self.bt = bt
 
     def __str__(self):
-        return '[{} {:02}/{:02}/{} {} {}{}]'.format(
+        bt_status = 'B({:03})'.format(round(self.bt.bat_level / 100, 1))
+        return '[{} {:02}/{:02}/{} {} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
             self.hour_msc,
             self.date_time.strftime("%H:%M:%S"),
             self.keyboard_layout,
             'V' if self.vpn_connected else ' ',
-            'B' if self.bt_connected else ' ',
+            bt_status if self.bt.connected else ' ' * len(bt_status),
         )
 
 
@@ -453,14 +505,14 @@ class TopProcess:
 
 
 class HardMonitorInfo:
-    def __init__(self, network: Network, disk: Disk, cpu: Cpu):
+    def __init__(self, network: Network, disk: Disk, cpu: Cpu, bt: Bluetooth):
         self.cpu = cpu
         self.memory = Memory()
         self.gpu = Gpu()
         self.network = network
         self.disk = disk
         self.battery = Battery()
-        self.common = Common()
+        self.common = Common(bt)
         self.top_process = TopProcess()
 
         self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
@@ -475,10 +527,12 @@ class HardMonitor:
         self.cpu = Cpu(period_s)
         self.network = Network(period_s)
         self.disk = Disk()
+        self.bt = Bluetooth(period_s)
 
     def stop(self):
         self.cpu.stop()
         self.network.stop()
+        self.bt.stop()
 
     def update_counters(self):
         self.cpu.calculate()
@@ -521,5 +575,5 @@ class HardMonitor:
     def get_info(self) -> HardMonitorInfo:
         self.update_counters()
 
-        info = HardMonitorInfo(self.network, self.disk, self.cpu)
+        info = HardMonitorInfo(self.network, self.disk, self.cpu, self.bt)
         return info
