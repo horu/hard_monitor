@@ -23,7 +23,7 @@ def main():
     parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
     args = parser.parse_args()
 
-    logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
+    hard_monitor.init_log(args.log)
 
     monitor = hard_monitor.HardMonitor(args.period)
     if not monitor.load_json(args.file):

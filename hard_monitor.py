@@ -21,6 +21,11 @@ import bluetooth
 import re
 
 
+def init_log(level):
+    logging.basicConfig(format='%(asctime)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s',
+                        level=logging.getLevelName(level))
+
+
 class Bluetooth:
     BAT_LEVEL_PERIOD_S = 600
 

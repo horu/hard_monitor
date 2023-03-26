@@ -142,6 +142,8 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--graph_debug', action='store_true', help='Debug output for graph')
     args = parser.parse_args()
 
+    hard_monitor.init_log(args.log)
+
     if args.pidfile:
         try:
             with args.pidfile.open('r') as file:
@@ -153,8 +155,6 @@ if __name__ == "__main__":
 
         with args.pidfile.open('w') as file:
             file.write(str(os.getpid()))
-
-    logging.basicConfig(format='%(asctime)s: %(message)s', level=logging.getLevelName(args.log))
 
     app = QApplication(sys.argv)
 
