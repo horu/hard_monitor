@@ -18,14 +18,15 @@ import array
 import subprocess
 import bluetooth_battery
 import bluetooth
+import re
 
 
 class Bluetooth:
-    BT_SYS_PATH = pathlib.Path('/sys/class/bluetooth')
+    BAT_LEVEL_PERIOD_S = 600
 
     def __init__(self, period_s: float):
-        self.connected = False
-        self.bat_level = 0
+        self.mac_address: typing.Optional[str] = None
+        self.bat_level: float = 0.0  # 0.0-1.0
 
         self.period_s = period_s
         self.stopping = threading.Event()
@@ -33,53 +34,51 @@ class Bluetooth:
         self.freq_list_theead.start()
         self.freq_list_ghz = []
 
+    def is_connected(self) -> bool:
+        return self.mac_address is not None
+
     def stop(self):
         self.stopping.set()
 
     def _get_mac(self):
         try:
-            return subprocess.check_output(
-                r"bluetoothctl info | grep Device | sed 's/Device \([:0-9A-F]\+\).*/\1/'",
-                shell=True,
-                text=True).splitlines()[0]
-        except:
-            pass
+            output = subprocess.check_output('bluetoothctl info | grep Device', shell=True, text=True).splitlines()
+            mac = re.findall('[:0-9A-F]{17}', output[0])
+            return mac[0]
+        except Exception as e:
+            logging.debug(e)
         return None
 
     def _check_loop(self):
+        timeout_get_bat_level = 0
         while not self.stopping.is_set():
             try:
-                connected = self._check_bt()
-                if connected and not self.connected:
+                prev_mac = self.mac_address
+                self.mac_address = self._get_mac()
+                if prev_mac != self.mac_address:
+                    self.bat_level = self._get_bat_level(force=True)
+                elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
                     self.bat_level = self._get_bat_level()
-                self.connected = connected
-            except:
-                pass
+                    timeout_get_bat_level = 0
+                else:
+                    timeout_get_bat_level += self.period_s
+            except Exception as e:
+                logging.debug(e)
             time.sleep(self.period_s)
 
-    def _check_bt(self) -> bool:
-        if not Bluetooth.BT_SYS_PATH.exists():
-            return False
-
-        for dev in Bluetooth.BT_SYS_PATH.iterdir():
-            uevent = dev / 'uevent'
-            if uevent.exists() and uevent.is_file():
-                with uevent.open('r') as file:
-                    if 'DEVTYPE=link' in file.readline():
-                        return True
-        return False
-
-    def _get_bat_level(self):
+    def _get_bat_level(self, force=False) -> float:
         result = 0
-        mac = self._get_mac()
-        try:
-            logging.debug(subprocess.check_output('bluetoothctl disconnect {}'.format(mac), shell=True, text=True))
-            b = bluetooth_battery.BatteryStateQuerier('{}'.format(mac), 1)
-            result = int(b)
-        except:
-            pass
-        if mac:
-            logging.debug(subprocess.check_output('bluetoothctl connect {}'.format(mac), shell=True, text=True))
+        if self.mac_address:
+            if force:
+                logging.debug(subprocess.check_output(
+                    'bluetoothctl disconnect {}'.format(self.mac_address),
+                    shell=True, text=True))
+            b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), 1)
+            result = int(b) / 100
+            if force:
+                logging.debug(subprocess.check_output(
+                    'bluetoothctl connect {}'.format(self.mac_address),
+                    shell=True, text=True))
         return result
 
 
@@ -469,7 +468,7 @@ class Common:
         self.bt = bt
 
     def __str__(self):
-        bt_status = 'B({:03})'.format(round(self.bt.bat_level / 100, 1))
+        bt_status = 'B({:03})'.format(round(self.bt.bat_level, 1))
         return '[{} {:02}/{:02}/{} {} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
@@ -477,7 +476,7 @@ class Common:
             self.date_time.strftime("%H:%M:%S"),
             self.keyboard_layout,
             'V' if self.vpn_connected else ' ',
-            bt_status if self.bt.connected else ' ' * len(bt_status),
+            bt_status if self.bt.is_connected() else ' ' * len(bt_status),
         )
 
 
