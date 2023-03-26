@@ -30,9 +30,8 @@ class Bluetooth:
 
         self.period_s = period_s
         self.stopping = threading.Event()
-        self.freq_list_theead = threading.Thread(target=self._check_loop)
-        self.freq_list_theead.start()
-        self.freq_list_ghz = []
+        self.check_theead = threading.Thread(target=self._check_loop)
+        self.check_theead.start()
 
     def is_connected(self) -> bool:
         return self.mac_address is not None
