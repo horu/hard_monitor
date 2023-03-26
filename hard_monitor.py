@@ -74,7 +74,7 @@ class Bluetooth:
                 logging.debug(subprocess.check_output(
                     'bluetoothctl disconnect {}'.format(self.mac_address),
                     shell=True, text=True))
-            for i in range(10):
+            for i in range(1, 11):
                 try:
                     b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), i)
                     result = int(b) / 100
