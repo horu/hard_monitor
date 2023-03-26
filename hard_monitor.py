@@ -64,7 +64,7 @@ class Bluetooth:
                     self._update_bat_level(force=self.force_reload_bt)
                 elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
                     timeout_get_bat_level = 0
-                    self._update_bat_level()
+                    # self._update_bat_level()
             except Exception as e:
                 logging.debug(e)
             time.sleep(self.period_s)
