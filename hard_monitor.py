@@ -58,13 +58,12 @@ class Bluetooth:
                 if prev_mac != self.mac_address:
                     self.bat_level = self._get_bat_level(force=True)
                 elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
-                    self.bat_level = self._get_bat_level()
                     timeout_get_bat_level = 0
-                else:
-                    timeout_get_bat_level += self.period_s
+                    self.bat_level = self._get_bat_level()
             except Exception as e:
                 logging.debug(e)
             time.sleep(self.period_s)
+            timeout_get_bat_level += self.period_s
 
     def _get_bat_level(self, force=False) -> float:
         result = 0
