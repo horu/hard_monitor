@@ -24,10 +24,11 @@ import re
 class Bluetooth:
     BAT_LEVEL_PERIOD_S = 600
 
-    def __init__(self, period_s: float):
+    def __init__(self, period_s: float, force_reload_bt: bool = False):
         self.mac_address: typing.Optional[str] = None
         self.bat_level: float = 0.0  # 0.0-1.0
 
+        self.force_reload_bt = force_reload_bt
         self.period_s = period_s
         self.stopping = threading.Event()
         self.check_theead = threading.Thread(target=self._check_loop)
@@ -55,7 +56,7 @@ class Bluetooth:
                 prev_mac = self.mac_address
                 self.mac_address = self._get_mac()
                 if prev_mac != self.mac_address:
-                    self._update_bat_level(force=True)
+                    self._update_bat_level(force=self.force_reload_bt)
                 elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
                     timeout_get_bat_level = 0
                     self._update_bat_level()
@@ -103,8 +104,8 @@ class Wlan:
         try:
             status, result = self._iw_get_ext(self.iface, Wlan.SIOCGIWRATE)
             return self._parse_data(self.fmt, result)[0]
-        except:
-            pass
+        except Exception as e:
+            logging.debug(e)
         return None
 
     def _parse_data(self, fmt, data):
@@ -174,7 +175,8 @@ class Battery:
                 self.current_now_a = int(file.readline()) / 1000000
             with (Battery.BAT_PATH / 'status').open('r') as file:
                 self.charge_status = False if 'Discharging' in file.readline() else True
-        except:
+        except Exception as e:
+            logging.debug(e)
             self.voltage_now_v = 0
             self.voltage_min_design_v = 0
             self.charge_now_ah = 0
@@ -238,7 +240,8 @@ class Cpu:
         sensors_temp = psutil.sensors_temperatures()
         try:
             self.temp_c = max(t.current for t in sensors_temp[Cpu.TEMP_SENSOR_NAME])
-        except:
+        except Exception as e:
+            logging.debug(e)
             self.temp_c = 0
 
         self.alarm = create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
@@ -269,8 +272,8 @@ class Cpu:
                         freq_list_min[i] = min(f, freq_list_min[i])
 
                 self.freq_list_ghz = [f / 1000 for f in freq_list_min]
-            except:
-                pass
+            except Exception as e:
+                logging.debug(e)
 
     def __str__(self):
         return '[{:4} {:4} ({}) Ghz {:2} °C]'.format(
@@ -300,7 +303,8 @@ class Gpu:
             #     self.freq1_input_ghz = int(file.readline()) / 1000000000
             # with (hwmon_path / 'freq2_input').open('r') as file:
             #     self.freq2_input_ghz = int(file.readline()) / 1000000000
-        except:
+        except Exception as e:
+            logging.debug(e)
             self.power1_average_w = 0
             self.power1_cap_w = 0
             self.temp2_input_c = 0
@@ -364,7 +368,8 @@ class Network:
         while not self.stopping.is_set():
             try:
                 self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=timeout))
-            except:
+            except Exception as e:
+                logging.debug(e)
                 self.ping_ms = None
             time.sleep(self.period_s)
 
@@ -443,7 +448,8 @@ class Disk:
         sensors_temp = psutil.sensors_temperatures()
         try:
             self.temp_c = max(t.current for t in sensors_temp[Disk.TEMP_SENSOR_NAME])
-        except:
+        except Exception as e:
+            logging.debug(e)
             self.temp_c = 0
 
         self.alarm = create_temp_alarm('NVME', self.temp_c, Disk.TEMP_CRIT_C)
@@ -469,8 +475,8 @@ class Common:
                 self.keyboard_layout = 'RU'
             else:
                 self.keyboard_layout = 'EN'
-        except:
-            pass
+        except Exception as e:
+            logging.debug(e)
 
         self.vpn_connected = any('ppp' in iface for iface in netifaces.interfaces())
         self.bt = bt
@@ -529,12 +535,12 @@ class HardMonitorInfo:
 
 
 class HardMonitor:
-    def __init__(self, period_s: float):
+    def __init__(self, period_s: float, force_reload_bt: bool = False):
         sensors.init()
         self.cpu = Cpu(period_s)
         self.network = Network(period_s)
         self.disk = Disk()
-        self.bt = Bluetooth(period_s)
+        self.bt = Bluetooth(period_s, force_reload_bt)
 
     def stop(self):
         self.cpu.stop()
@@ -563,7 +569,8 @@ class HardMonitor:
             DiskCounters = collections.namedtuple('DiskCounters', dump['disk_counters'])
             self.disk.disk_counters = DiskCounters(**dump['disk_counters'])
             self.disk.counters_time = counters_time
-        except Exception:
+        except Exception as e:
+            logging.debug(e)
             return False
         return True
 

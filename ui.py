@@ -68,7 +68,7 @@ class Backend:
         self.height = height
         self.reset_geometry()
 
-        self.hard_monitor = hard_monitor.HardMonitor(period_s)
+        self.hard_monitor = hard_monitor.HardMonitor(period_s, force_reload_bt=True)
         self.hard_monitor.update_counters()
 
         self.print_timer = QTimer()
@@ -148,8 +148,8 @@ if __name__ == "__main__":
                 pid = int(file.readline())
                 logging.info('pid: {}'.format(pid))
                 os.kill(pid, signal.SIGKILL)
-        except:
-            pass
+        except Exception as e:
+            logging.debug(e)
 
         with args.pidfile.open('w') as file:
             file.write(str(os.getpid()))
