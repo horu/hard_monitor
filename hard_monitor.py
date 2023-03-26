@@ -55,29 +55,39 @@ class Bluetooth:
                 prev_mac = self.mac_address
                 self.mac_address = self._get_mac()
                 if prev_mac != self.mac_address:
-                    self.bat_level = self._get_bat_level(force=True)
+                    self._update_bat_level(force=True)
                 elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
                     timeout_get_bat_level = 0
-                    self.bat_level = self._get_bat_level()
+                    self._update_bat_level()
             except Exception as e:
                 logging.debug(e)
             time.sleep(self.period_s)
             timeout_get_bat_level += self.period_s
 
-    def _get_bat_level(self, force=False) -> float:
-        result = 0
-        if self.mac_address:
+    def _update_bat_level(self, force=False):
+        if not self.mac_address:
+            return
+
+        try:
             if force:
                 logging.debug(subprocess.check_output(
                     'bluetoothctl disconnect {}'.format(self.mac_address),
                     shell=True, text=True))
-            b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), 1)
-            result = int(b) / 100
-            if force:
-                logging.debug(subprocess.check_output(
-                    'bluetoothctl connect {}'.format(self.mac_address),
-                    shell=True, text=True))
-        return result
+            for i in range(10):
+                try:
+                    b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), i)
+                    result = int(b) / 100
+                    self.bat_level = result
+                    break
+                except Exception as e:
+                    logging.debug('{}: {}'.format(i, e))
+        except Exception as e:
+            logging.debug(e)
+
+        if force:
+            logging.debug(subprocess.check_output(
+                'bluetoothctl connect {}'.format(self.mac_address),
+                shell=True, text=True))
 
 
 class Wlan:
