@@ -1,9 +1,6 @@
-import argparse
 import logging
 import os
-import pathlib
 import signal
-import time
 import typing
 
 from PyQt5.QtCore import QTimer, QDateTime, QPoint, QRect
@@ -14,6 +11,7 @@ from PyQt5.QtGui import QFont, QMouseEvent
 import sys
 import hard_monitor
 import graph
+import common
 
 
 class Window(QMainWindow):
@@ -131,18 +129,7 @@ class Backend:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog='hard_monitor', description='Show hardware monitor')
-    parser.add_argument('-p', '--period', type=float, default=2.0, help='Timeout for collecting counters.')
-    parser.add_argument('-f', '--pidfile', type=pathlib.Path, default='/tmp/hard_monitor_ui_default',
-                        help='File to save pid.')
-    parser.add_argument('-l', '--log', type=str, default='ERROR', help='Log level.')
-    parser.add_argument('--height', type=int, default=None, help='Location height of panel.')
-    parser.add_argument('-g', '--graph_height', type=int, default=17, help='Location height of graph pixels')
-    parser.add_argument('-t', '--graph_time', type=int, default=600, help='Total graph timeline sec')
-    parser.add_argument('-d', '--graph_debug', action='store_true', help='Debug output for graph')
-    args = parser.parse_args()
-
-    hard_monitor.init_log(args.log)
+    args = common.init()
 
     if args.pidfile:
         try:

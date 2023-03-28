@@ -17,13 +17,7 @@ import socket
 import array
 import subprocess
 import bluetooth_battery
-import bluetooth
 import re
-
-
-def init_log(level):
-    logging.basicConfig(format='%(asctime)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s',
-                        level=logging.getLevelName(level))
 
 
 class BluetoothDevice:
