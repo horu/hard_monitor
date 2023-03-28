@@ -1,10 +1,11 @@
 import argparse
-import inspect
 import logging
 import os
 import pathlib
 import signal
 from logging.handlers import SysLogHandler
+
+import typing
 
 
 class log:
@@ -80,3 +81,23 @@ def init():
         with args.pidfile.open('w') as file:
             file.write(str(current_pid))
     return args
+
+
+def convert_speed(speed: float) -> str:
+    if speed < 0:
+        speed = 0
+    elif speed >= 1000:
+        speed = 999
+
+    if speed <= 9.9:
+        speed = round(speed, 1)
+    else:
+        speed = round(speed)
+
+    return '{:3}'.format(speed)
+
+
+def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[str]:
+    if temp >= limit:
+        return '{} crit t {:2}/{:2} °C'.format(name, round(temp), round(limit))
+    return None
