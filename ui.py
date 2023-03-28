@@ -1,4 +1,3 @@
-import logging
 import os
 import signal
 import typing
@@ -130,18 +129,6 @@ class Backend:
 
 if __name__ == "__main__":
     args = common.init()
-
-    if args.pidfile:
-        try:
-            with args.pidfile.open('r') as file:
-                pid = int(file.readline())
-                logging.info('pid: {}'.format(pid))
-                os.kill(pid, signal.SIGKILL)
-        except Exception as e:
-            logging.debug(e)
-
-        with args.pidfile.open('w') as file:
-            file.write(str(os.getpid()))
 
     app = QApplication(sys.argv)
 

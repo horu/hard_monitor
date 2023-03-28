@@ -1,5 +1,4 @@
 import fcntl
-import logging
 import os
 import struct
 import threading
@@ -19,6 +18,8 @@ import subprocess
 import bluetooth_battery
 import re
 
+import common
+
 
 class BluetoothDevice:
     BAT_UPDATE_PERIOD_S = 3 * 3600
@@ -33,27 +34,25 @@ class BluetoothDevice:
         if update_time - self.bat_update_time < self.BAT_UPDATE_PERIOD_S:
             return
 
-        logging.debug('Update bat level for {}'.format(self.mac_address))
+        common.log.info('update bat level for', self.mac_address)
         try:
-            logging.debug(subprocess.check_output(
-                'bluetoothctl disconnect {}'.format(self.mac_address),
-                shell=True, text=True))
+            o = subprocess.check_output('bluetoothctl disconnect {}'.format(self.mac_address), shell=True, text=True)
+            common.log.debug('disconnect bt device', o.splitlines())
             for i in range(1, 11):
                 try:
                     b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), i)
                     result = int(b) / 100
                     self.bat_level = result
                     self.bat_update_time = update_time
-                    logging.debug('bat level is {}'.format(result))
+                    common.log.info('bat level is', result)
                     break
                 except Exception as e:
-                    logging.debug('{}: {}'.format(i, e))
+                    common.log.debug('port error', i, e)
         except Exception as e:
-            logging.debug(e)
+            common.log.error('update bt error', e)
 
-        logging.debug(subprocess.check_output(
-            'bluetoothctl connect {}'.format(self.mac_address),
-            shell=True, text=True))
+        o = subprocess.check_output('bluetoothctl connect {}'.format(self.mac_address), shell=True, text=True)
+        common.log.debug('connect bt device', o.splitlines())
 
 
 class Bluetooth:
@@ -89,7 +88,7 @@ class Bluetooth:
                 mac = re.findall('[:0-9A-F]{17}', output[0])
                 return mac[0]
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
         return None
 
     def _update_current_device(self):
@@ -100,19 +99,19 @@ class Bluetooth:
 
             for device in self.device_list:
                 if device.mac_address == mac_address:
-                    logging.debug('Fund old device {}'.format(device.mac_address))
+                    common.log.info('found old device', device.mac_address)
                     break
             else:
                 if len(self.device_list) >= Bluetooth.MAX_DEVICE_SIZE:
                     to_remove = self.device_list.pop(0)
-                    logging.debug('Removed device {}'.format(to_remove.mac_address))
+                    common.log.info('removed device', to_remove.mac_address)
 
                 device = BluetoothDevice(mac_address)
-                logging.debug('Add new device {}'.format(device.mac_address))
+                common.log.info('add new device', device.mac_address)
                 self.device_list.append(device)
 
             self.current_device = device
-            logging.debug('Current device {}'.format(self.current_device.mac_address))
+            common.log.info('current device', self.current_device.mac_address)
         else:
             self.current_device = None
 
@@ -122,13 +121,13 @@ class Bluetooth:
                 prev_device = self.current_device
                 self._update_current_device()
                 if self.current_device and prev_device != self.current_device:
-                    logging.debug('Connected device {}'.format(self.current_device.mac_address))
+                    common.log.info('connected device', self.current_device.mac_address)
                     if self.force_reload_bt:
                         self.current_device.update_bat_level()
                 elif prev_device != self.current_device:
-                    logging.debug('Disconnected device {}'.format(prev_device.mac_address))
+                    common.log.info('disconnected device', prev_device.mac_address)
             except Exception as e:
-                logging.debug(e)
+                common.log.error(e)
             time.sleep(self.period_s)
 
 
@@ -146,7 +145,7 @@ class Wlan:
             status, result = self._iw_get_ext(self.iface, Wlan.SIOCGIWRATE)
             return self._parse_data(self.fmt, result)[0]
         except Exception as e:
-            logging.debug(e)
+            common.log.debug('iface error', self.iface, e)
         return None
 
     def _parse_data(self, fmt, data):
@@ -217,7 +216,7 @@ class Battery:
             with (Battery.BAT_PATH / 'status').open('r') as file:
                 self.charge_status = False if 'Discharging' in file.readline() else True
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
             self.voltage_now_v = 0
             self.voltage_min_design_v = 0
             self.charge_now_ah = 0
@@ -282,7 +281,7 @@ class Cpu:
         try:
             self.temp_c = max(t.current for t in sensors_temp[Cpu.TEMP_SENSOR_NAME])
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
             self.temp_c = 0
 
         self.alarm = create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
@@ -314,7 +313,7 @@ class Cpu:
 
                 self.freq_list_ghz = [f / 1000 for f in freq_list_min]
             except Exception as e:
-                logging.debug(e)
+                common.log.error(e)
 
     def __str__(self):
         return '[{:4} {:4} ({}) Ghz {:2} °C]'.format(
@@ -345,7 +344,7 @@ class Gpu:
             # with (hwmon_path / 'freq2_input').open('r') as file:
             #     self.freq2_input_ghz = int(file.readline()) / 1000000000
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
             self.power1_average_w = 0
             self.power1_cap_w = 0
             self.temp2_input_c = 0
@@ -410,7 +409,7 @@ class Network:
             try:
                 self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=timeout))
             except Exception as e:
-                logging.debug(e)
+                common.log.debug('ping error', e)
                 self.ping_ms = None
             time.sleep(self.period_s)
 
@@ -490,7 +489,7 @@ class Disk:
         try:
             self.temp_c = max(t.current for t in sensors_temp[Disk.TEMP_SENSOR_NAME])
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
             self.temp_c = 0
 
         self.alarm = create_temp_alarm('NVME', self.temp_c, Disk.TEMP_CRIT_C)
@@ -517,7 +516,7 @@ class Common:
             else:
                 self.keyboard_layout = 'EN'
         except Exception as e:
-            logging.debug(e)
+            common.log.error(e)
 
         self.vpn_connected = any('ppp' in iface for iface in netifaces.interfaces())
         self.bt = bt
@@ -582,6 +581,7 @@ class HardMonitor:
         self.network = Network(period_s)
         self.disk = Disk()
         self.bt = Bluetooth(period_s, force_reload_bt)
+        common.log.info(period_s, force_reload_bt)
 
     def stop(self):
         self.cpu.stop()
@@ -594,6 +594,7 @@ class HardMonitor:
         self.disk.calculate()
 
     def load_json(self, file: pathlib.Path) -> bool:
+        common.log.info('read json', file)
         try:
             with file.open('r') as output:
                 dump = json.load(output)
@@ -611,11 +612,13 @@ class HardMonitor:
             self.disk.disk_counters = DiskCounters(**dump['disk_counters'])
             self.disk.counters_time = counters_time
         except Exception as e:
-            logging.debug(e)
+            common.log.error('read json error', e)
             return False
+        common.log.info('read json success', file)
         return True
 
     def save_json(self, file: pathlib.Path) -> None:
+        common.log.info('write json', file)
         dump = {
             'counters_time': self.cpu.counters_time,
             'cpu_counters': self.cpu.cpu_counters._asdict(),
@@ -625,7 +628,12 @@ class HardMonitor:
         json_dump = json.dumps(dump, sort_keys=True, indent=4)
 
         with file.open('w') as outfile:
-            outfile.write(json_dump)
+            try:
+                outfile.write(json_dump)
+            except Exception as e:
+                common.log.error('write json error', e)
+                return
+        common.log.info('write json success', file)
 
     def get_info(self) -> HardMonitorInfo:
         self.update_counters()
