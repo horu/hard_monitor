@@ -26,12 +26,48 @@ def init_log(level):
                         level=logging.getLevelName(level))
 
 
+class BluetoothDevice:
+    BAT_UPDATE_PERIOD_S = 3 * 3600
+
+    def __init__(self, mac_address: str):
+        self.mac_address = mac_address
+        self.bat_level: float = 0.0  # 0.0-1.0
+        self.bat_update_time = 0
+
+    def update_bat_level(self):
+        update_time = time.time()
+        if update_time - self.bat_update_time < self.BAT_UPDATE_PERIOD_S:
+            return
+
+        logging.debug('Update bat level for {}'.format(self.mac_address))
+        try:
+            logging.debug(subprocess.check_output(
+                'bluetoothctl disconnect {}'.format(self.mac_address),
+                shell=True, text=True))
+            for i in range(1, 11):
+                try:
+                    b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), i)
+                    result = int(b) / 100
+                    self.bat_level = result
+                    self.bat_update_time = update_time
+                    logging.debug('bat level is {}'.format(result))
+                    break
+                except Exception as e:
+                    logging.debug('{}: {}'.format(i, e))
+        except Exception as e:
+            logging.debug(e)
+
+        logging.debug(subprocess.check_output(
+            'bluetoothctl connect {}'.format(self.mac_address),
+            shell=True, text=True))
+
+
 class Bluetooth:
-    BAT_LEVEL_PERIOD_S = 600
+    MAX_DEVICE_SIZE = 5
 
     def __init__(self, period_s: float, force_reload_bt: bool = False):
-        self.mac_address: typing.Optional[str] = None
-        self.bat_level: float = 0.0  # 0.0-1.0
+        self.device_list: typing.List[BluetoothDevice] = []
+        self.current_device: typing.Optional[BluetoothDevice] = None
 
         self.force_reload_bt = force_reload_bt
         self.period_s = period_s
@@ -40,60 +76,66 @@ class Bluetooth:
         self.check_theead.start()
 
     def is_connected(self) -> bool:
-        return self.mac_address is not None
+        return self.current_device is not None
+
+    def get_bat_level(self) -> float:
+        if self.current_device:
+            return self.current_device.bat_level
+        return 0
 
     def stop(self):
         self.stopping.set()
 
-    def _get_mac(self):
+    def _get_current_mac(self):
         try:
-            output = subprocess.check_output('bluetoothctl info | grep Device', shell=True, text=True).splitlines()
-            mac = re.findall('[:0-9A-F]{17}', output[0])
-            return mac[0]
+            p = subprocess.run('bluetoothctl info | grep Device',
+                               shell=True, text=True, check=False, stdout=subprocess.PIPE)
+            if p.returncode == 0:
+                output = p.stdout.splitlines()
+                mac = re.findall('[:0-9A-F]{17}', output[0])
+                return mac[0]
         except Exception as e:
             logging.debug(e)
         return None
 
+    def _update_current_device(self):
+        mac_address = self._get_current_mac()
+        if mac_address:
+            if self.current_device and self.current_device.mac_address == mac_address:
+                return
+
+            for device in self.device_list:
+                if device.mac_address == mac_address:
+                    logging.debug('Fund old device {}'.format(device.mac_address))
+                    break
+            else:
+                if len(self.device_list) >= Bluetooth.MAX_DEVICE_SIZE:
+                    to_remove = self.device_list.pop(0)
+                    logging.debug('Removed device {}'.format(to_remove.mac_address))
+
+                device = BluetoothDevice(mac_address)
+                logging.debug('Add new device {}'.format(device.mac_address))
+                self.device_list.append(device)
+
+            self.current_device = device
+            logging.debug('Current device {}'.format(self.current_device.mac_address))
+        else:
+            self.current_device = None
+
     def _check_loop(self):
-        timeout_get_bat_level = 0
         while not self.stopping.is_set():
             try:
-                prev_mac = self.mac_address
-                self.mac_address = self._get_mac()
-                if prev_mac != self.mac_address:
-                    self._update_bat_level(force=self.force_reload_bt)
-                elif timeout_get_bat_level >= self.BAT_LEVEL_PERIOD_S:
-                    timeout_get_bat_level = 0
-                    # self._update_bat_level()
+                prev_device = self.current_device
+                self._update_current_device()
+                if self.current_device and prev_device != self.current_device:
+                    logging.debug('Connected device {}'.format(self.current_device.mac_address))
+                    if self.force_reload_bt:
+                        self.current_device.update_bat_level()
+                elif prev_device != self.current_device:
+                    logging.debug('Disconnected device {}'.format(prev_device.mac_address))
             except Exception as e:
                 logging.debug(e)
             time.sleep(self.period_s)
-            timeout_get_bat_level += self.period_s
-
-    def _update_bat_level(self, force=False):
-        if not self.mac_address:
-            return
-
-        try:
-            if force:
-                logging.debug(subprocess.check_output(
-                    'bluetoothctl disconnect {}'.format(self.mac_address),
-                    shell=True, text=True))
-            for i in range(1, 11):
-                try:
-                    b = bluetooth_battery.BatteryStateQuerier('{}'.format(self.mac_address), i)
-                    result = int(b) / 100
-                    self.bat_level = result
-                    break
-                except Exception as e:
-                    logging.debug('{}: {}'.format(i, e))
-        except Exception as e:
-            logging.debug(e)
-
-        if force:
-            logging.debug(subprocess.check_output(
-                'bluetoothctl connect {}'.format(self.mac_address),
-                shell=True, text=True))
 
 
 class Wlan:
@@ -487,7 +529,7 @@ class Common:
         self.bt = bt
 
     def __str__(self):
-        bt_status = 'B/{:03}'.format(round(self.bt.bat_level, 1))
+        bt_status = 'B/{:03}'.format(round(self.bt.get_bat_level(), 1))
         return '[{} {:02}/{:02}/{} {} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
