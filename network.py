@@ -11,8 +11,12 @@ import psutil
 import typing
 import netifaces
 import subprocess
+import pulsectl
+import pulsectl.lookup
+import tailer
 
 import common
+import systemd.journal
 
 
 class BluetoothDevice:
@@ -49,7 +53,7 @@ class BluetoothDevice:
         common.log.debug('connect bt device', o.splitlines())
 
 
-class Bluetooth:
+class _Bluetooth:
     MAX_DEVICE_SIZE = 5
 
     def __init__(self, period_s: float, force_reload_bt: bool = False):
@@ -123,6 +127,61 @@ class Bluetooth:
             except Exception as e:
                 common.log.error(e)
             time.sleep(self.period_s)
+
+
+class Bluetooth:
+    def __init__(self, period_s: float, force_reload_bt: bool = False):
+        self.connected = False
+        self.bat_level = 0.0
+        self.period_s = period_s
+
+        self.stopping = threading.Event()
+        self.theead = threading.Thread(target=self._loop)
+        self.theead.start()
+
+    def _loop(self):
+        journal = systemd.journal.Reader()
+        journal.this_boot()
+        journal.seek_tail()
+        journal.log_level(systemd.journal.LOG_INFO)
+        journal.add_match('SYSLOG_IDENTIFIER=pulseaudio', 'SYSLOG_IDENTIFIER=bluetoothd')
+
+        while not self.stopping.is_set():
+            try:
+                journal.wait(self.period_s)
+                for line in journal:
+                    if self.stopping.is_set():
+                        break
+
+                    message = line['MESSAGE']
+                    id = line['SYSLOG_IDENTIFIER']
+
+                    common.log.debug(id, message)
+
+                    if 'pulseaudio' in id:
+                        bat_lvl_array = re.findall('Battery Level: ([0-9]+)%', message)
+                        if bat_lvl_array:
+                            self.bat_level = int(bat_lvl_array[0]) / 100
+                            common.log.info('bt device bat lvl', self.bat_level)
+                    elif 'bluetoothd' in id:
+                        if 'disconnected' in message:
+                            self.connected = False
+                            common.log.info('disconnected bt device')
+                        elif 'ready' in message:
+                            self.connected = True
+                            common.log.info('connected bt device')
+
+            except Exception as e:
+                common.log.error(e)
+
+    def is_connected(self) -> bool:
+        return self.connected
+
+    def get_bat_level(self) -> float:
+        return self.bat_level
+
+    def stop(self):
+        self.stopping.set()
 
 
 class WlanDevice:

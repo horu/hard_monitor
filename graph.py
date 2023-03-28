@@ -10,6 +10,7 @@ import numpy as np
 import pyqtgraph as pg
 
 import hard_monitor
+import network
 
 FONT_SIZE = 10
 TRANSPARENCY = 0.7
@@ -259,7 +260,7 @@ class Network:
             fill=pg.mkBrush(100, 100, 255, 255 * GRAPH_TR),
             fill_level=y_min)
 
-    def update(self, net: hard_monitor.Network):
+    def update(self, net: network.Network):
         self.label.update(str(net))
 
         self.recv_plot.add_value(net.recv_mbps)

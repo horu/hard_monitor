@@ -20,7 +20,8 @@ class log:
             handler = logging.FileHandler(filename)
 
         log.logger.setLevel(logging.getLevelName(level))
-        f = logging.Formatter('%(asctime)s: %(levelname)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s')
+        f = logging.Formatter(
+            'hard_monitor: %(asctime)s: %(levelname)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s')
         handler.setFormatter(f)
         log.logger.addHandler(handler)
 
