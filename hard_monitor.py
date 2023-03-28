@@ -176,7 +176,7 @@ class Gpu:
                 with hwmon_device.open('r') as file:
                     if Gpu.GPU_DEVICE_ID in file.readline():
                         return hwmon
-        return None
+        raise Exception('gpu device {} not found. change id.'.format(self.GPU_DEVICE_ID))
 
     def __str__(self):
         return '[{:2} W {:2} °C]'.format(
