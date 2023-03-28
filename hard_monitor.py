@@ -131,7 +131,7 @@ class Bluetooth:
             time.sleep(self.period_s)
 
 
-class Wlan:
+class WlanDevice:
     SIOCGIWRATE = 0x8B21  # get default bit rate (bps)
     IFNAMSIZE = 16
 
@@ -142,7 +142,7 @@ class Wlan:
 
     def iw_get_bitrate(self) -> typing.Optional[int]:
         try:
-            status, result = self._iw_get_ext(self.iface, Wlan.SIOCGIWRATE)
+            status, result = self._iw_get_ext(self.iface, self.SIOCGIWRATE)
             return self._parse_data(self.fmt, result)[0]
         except Exception as e:
             common.log.debug('iface error', self.iface, e)
@@ -165,7 +165,7 @@ class Wlan:
 
     def _iw_get_ext(self, ifname, request, data=None):
         """ Read information from ifname. """
-        buff = Wlan.IFNAMSIZE-len(ifname)
+        buff = self.IFNAMSIZE-len(ifname)
         ifreq = array.array('b', ifname.encode('utf-8') + b'\0'*buff)
         # put some additional data behind the interface name
         if data is not None:
@@ -175,7 +175,35 @@ class Wlan:
             ifreq.extend(b'\0'*16)
 
         result = fcntl.ioctl(self.sockfd.fileno(), request, ifreq)
-        return result, ifreq[Wlan.IFNAMSIZE:]
+        return result, ifreq[self.IFNAMSIZE:]
+
+    def __str__(self):
+        return self.iface
+
+
+class Wlan:
+    def __init__(self):
+        self.device = None
+        self.bitrate_mbitps = None
+
+    def calculate_wlan_bitrate(self):
+        if self._calculate_wlan_bitrate_for_iface():
+            return
+
+        for iface in netifaces.interfaces():
+            self.device = WlanDevice(iface)
+            if self._calculate_wlan_bitrate_for_iface():
+                common.log.info('found wlan divece', self.device)
+                return
+        self.bitrate_mbitps = None
+
+    def _calculate_wlan_bitrate_for_iface(self) -> bool:
+        if self.device:
+            bitrate = self.device.iw_get_bitrate()
+            if bitrate:
+                self.bitrate_mbitps = bitrate / 1000000
+                return True
+        return False
 
 
 def convert_speed(speed: float) -> str:
@@ -399,8 +427,7 @@ class Network:
         self.recv_mbps = 0
         self.send_mbps = 0
 
-        self.wlan = None
-        self.wlan_bitrate_mbitps = None
+        self.wlan = Wlan()
 
     def _ping_loop(self):
         timeout = 5
@@ -425,25 +452,7 @@ class Network:
         self.recv_mbps = (self.net_counters.bytes_recv - net_counters_prev.bytes_recv) / time_diff / 1024 / 1024
         self.send_mbps = (self.net_counters.bytes_sent - net_counters_prev.bytes_sent) / time_diff / 1024 / 1024
 
-        self._calculate_wlan_bitrate()
-
-    def _calculate_wlan_bitrate(self):
-        if self._calculate_wlan_bitrate_for_iface():
-            return
-
-        for iface in netifaces.interfaces():
-            self.wlan = Wlan(iface)
-            if self._calculate_wlan_bitrate_for_iface():
-                return
-        self.wlan_bitrate_mbitps = None
-
-    def _calculate_wlan_bitrate_for_iface(self) -> bool:
-        if self.wlan:
-            bitrate = self.wlan.iw_get_bitrate()
-            if bitrate:
-                self.wlan_bitrate_mbitps = bitrate / 1000000
-                return True
-        return False
+        self.wlan.calculate_wlan_bitrate()
 
     def stop(self):
         self.stopping.set()
@@ -453,7 +462,7 @@ class Network:
             convert_speed(self.recv_mbps),
             convert_speed(self.send_mbps),
             self.ping_ms if self.ping_ms else '****',
-            round(self.wlan_bitrate_mbitps) if self.wlan_bitrate_mbitps else '***'
+            round(self.wlan.bitrate_mbitps) if self.wlan.bitrate_mbitps else '***'
         )
 
 
