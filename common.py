@@ -7,9 +7,11 @@ from logging.handlers import SysLogHandler
 
 import typing
 
+SERVICE_NAME = 'hard_monitor'
+
 
 class log:
-    logger = logging.getLogger('hard_monitor')
+    logger = logging.getLogger(SERVICE_NAME)
 
     @staticmethod
     def init(level, filename):
@@ -21,7 +23,7 @@ class log:
 
         log.logger.setLevel(logging.getLevelName(level))
         f = logging.Formatter(
-            'hard_monitor: %(asctime)s: %(levelname)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s')
+            '{}: %(asctime)s: %(levelname)s: %(funcName)s (%(filename)s:%(lineno)d): %(message)s', SERVICE_NAME)
         handler.setFormatter(f)
         log.logger.addHandler(handler)
 
@@ -45,6 +47,13 @@ class log:
     @staticmethod
     def error(*args, **kwargs):
         log._log_call('error', *args, **kwargs)
+
+
+def object_to_str(obj) -> str:
+    return '{}: {}'.format(
+        type(obj).__name__,
+        ', '.join('{}={}'.format(name, value) for name, value in obj.__dict__.items()),
+    )
 
 
 PID_FILE = pathlib.Path('/tmp/hard_monitor_ui_default')

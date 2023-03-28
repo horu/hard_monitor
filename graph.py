@@ -9,6 +9,7 @@ import math
 import numpy as np
 import pyqtgraph as pg
 
+import common
 import hard_monitor
 import network
 
@@ -79,6 +80,7 @@ class GraphConfig:
         self.total_time_s = total_time_s
         self.y_min = y_min
         self.debug = debug
+        common.log.info(common.object_to_str(self))
 
 
 class Graph:

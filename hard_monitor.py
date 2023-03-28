@@ -316,17 +316,23 @@ class HardMonitorInfo:
 
         self.alarms = [alarm for alarm in (self.gpu.alarm, self.disk.alarm, self.cpu.alarm) if alarm]
 
+    def get_time(self) -> float:
+        return self.cpu.counters_time
+
     def __str__(self):
         return ' '.join(str(value) for attr, value in self.__dict__.items() if attr != 'alarms')
 
 
 class HardMonitor:
+    PRINT_TO_LOG_PERIOD_S = 60
+
     def __init__(self, period_s: float, force_reload_bt: bool = False):
         sensors.init()
         self.cpu = Cpu(period_s)
         self.network = network.Network(period_s)
         self.disk = Disk()
         self.bt = network.Bluetooth(period_s, force_reload_bt)
+        self.last_log_time: float = 0
         common.log.info(period_s, force_reload_bt)
 
     def stop(self):
@@ -385,4 +391,7 @@ class HardMonitor:
         self.update_counters()
 
         info = HardMonitorInfo(self.network, self.disk, self.cpu, self.bt)
+        if info.get_time() - self.last_log_time > self.PRINT_TO_LOG_PERIOD_S:
+            self.last_log_time = info.get_time()
+            common.log.info(info)
         return info

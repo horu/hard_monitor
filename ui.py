@@ -55,6 +55,8 @@ class Window(QMainWindow):
     def notify(self, text: typing.Optional[str]):
         if not text:
             text = ''
+        else:
+            common.log.info('alarm', text)
         self.notify_label.setVisible(True if text else False)
         self.notify_label.setText(text)
 

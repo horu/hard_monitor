@@ -143,7 +143,7 @@ class Bluetooth:
         journal = systemd.journal.Reader()
         journal.this_boot()
         journal.seek_tail()
-        journal.log_level(systemd.journal.LOG_INFO)
+        journal.log_level(systemd.journal.LOG_DEBUG)
         journal.add_match('SYSLOG_IDENTIFIER=pulseaudio', 'SYSLOG_IDENTIFIER=bluetoothd')
 
         while not self.stopping.is_set():
@@ -156,12 +156,17 @@ class Bluetooth:
                     message = line['MESSAGE']
                     id = line['SYSLOG_IDENTIFIER']
 
-                    common.log.debug(id, message)
+                    # prevent recursive syslog loop
+                    if common.SERVICE_NAME in message:
+                        continue
+
+                    common.log.info(id, message)
 
                     if 'pulseaudio' in id:
                         bat_lvl_array = re.findall('Battery Level: ([0-9]+)%', message)
                         if bat_lvl_array:
                             self.bat_level = int(bat_lvl_array[0]) / 100
+                            self.connected = True
                             common.log.info('bt device bat lvl', self.bat_level)
                     elif 'bluetoothd' in id:
                         if 'disconnected' in message:
