@@ -254,7 +254,7 @@ class Network:
         self.label = Label(*args, **kwargs)
 
         y_min = -1  # 0.1 mbps
-        y_max = 1  # 10 mbps
+        y_max = 1.3  # 20 mbps
         self.label.set_log_mode(y=True)
         self.label.update_y_range(y_min, y_max)
         self.recv_plot = self.label.graph.create_plot(fill_level=y_min)
