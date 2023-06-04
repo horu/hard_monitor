@@ -77,8 +77,8 @@ class Backend:
         self.test_notify_timer = QTimer()
         self.test_notify_timer.timeout.connect(self.test_notify)
         self.test_notify_timer.start(4500)
-        self.test_notify_temp_crit_c = hard_monitor.Cpu.TEMP_CRIT_C
-        hard_monitor.Cpu.TEMP_CRIT_C = 30
+        self.test_notify_temp_crit_c = hard_monitor.CPU_TEMP_CRIT_C
+        hard_monitor.CPU_TEMP_CRIT_C = 30
 
         #self.window.centralWidget().mousePressEvent = self.on_press_event
         #self.window.centralWidget().mouseDoubleClickEvent = self.on_double_click_event
@@ -107,7 +107,7 @@ class Backend:
             event.accept()
 
     def test_notify(self):
-        hard_monitor.Cpu.TEMP_CRIT_C = self.test_notify_temp_crit_c
+        hard_monitor.CPU_TEMP_CRIT_C = self.test_notify_temp_crit_c
         self.test_notify_timer.stop()
 
     def print(self):
