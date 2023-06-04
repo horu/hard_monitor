@@ -1,0 +1,13 @@
+[Unit]
+Description=Hard monitor loptop
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+ExecStart=/usr/local/bin/hard_monitor.sh
+
+[Install]
+WantedBy=multi-user.target
