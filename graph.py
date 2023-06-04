@@ -17,6 +17,8 @@ FONT_SIZE = 10
 TRANSPARENCY = 0.7
 GRAPH_TR = 0.5
 
+BATTERY_DUR_MULTIPLIER = 6  # 10min * 6
+
 
 def create_widget() -> QWidget:
     widget = QWidget()
@@ -291,9 +293,8 @@ class Disk:
 
 class Battery:
     def __init__(self, config: GraphConfig):
-        battery_dur_multiplier = 12
-        config.accum_size = config.accum_size * battery_dur_multiplier
-        config.total_time_s = config.total_time_s * battery_dur_multiplier
+        config.accum_size = config.accum_size * BATTERY_DUR_MULTIPLIER
+        config.total_time_s = config.total_time_s * BATTERY_DUR_MULTIPLIER
 
         self.label = Label(config)
         self.plot = self.label.graph.create_plot()
