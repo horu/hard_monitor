@@ -20,6 +20,7 @@ BAT_PATH = pathlib.Path('/sys/class/power_supply/BAT1')
 
 CPU_TEMP_SENSOR_NAME = 'k10temp'  # DEBUG mode grep 'Sensor names'
 CPU_TEMP_CRIT_C = 90
+CPU_POWER_SENSOR_PATH = pathlib.Path('/sys/class/powercap/intel-rapl:0/energy_uj')
 
 GPU_DEVICE_ID = '0x7340'  # DEBUG mode grep 'GPU device'
 HWMON_PATH = pathlib.Path('/sys/class/hwmon/')
@@ -93,14 +94,19 @@ class Cpu:
         self.freq_list_theead.start()
         self.freq_list_ghz = []
 
+        self.power_uj_counter = 0
+        self.power_w = 0
+
     def stop(self):
         self.stopping.set()
 
     def calculate(self):
         cpu_counters_prev = self.cpu_counters
         counters_time_prev = self.counters_time
+        power_uj_counter_prev = self.power_uj_counter
 
         self.cpu_counters = psutil.cpu_times()
+        self.power_uj_counter = self._get_power_uj_counter()
         self.counters_time = time.time()
 
         time_diff = self.counters_time - counters_time_prev
@@ -110,6 +116,7 @@ class Cpu:
         self.loadavg_current = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
 
         self.loadavg_1m = round(os.getloadavg()[0], 1)
+        self.power_w = ((self.power_uj_counter - power_uj_counter_prev) / time_diff) / 1000000
 
         sensors_temp = get_sensors_temperatures()
         try:
@@ -119,6 +126,15 @@ class Cpu:
             self.temp_c = 0
 
         self.alarm = common.create_temp_alarm('CPU', self.temp_c, CPU_TEMP_CRIT_C)
+
+    # return micro joule
+    def _get_power_uj_counter(self) -> int:
+        try:
+            with CPU_POWER_SENSOR_PATH.open('r') as file:
+                return int(file.readline())
+        except Exception as e:
+            common.log.error(e)
+        return 0
 
     def _take_freq_list(self) -> None:
         count = 5
@@ -150,10 +166,11 @@ class Cpu:
                 common.log.error(e)
 
     def __str__(self):
-        return '[{:4} {:4} ({}) Ghz {:2} °C]'.format(
+        return '[{:4} {:4} ({}) Ghz {:2} W {:2} °C]'.format(
             round(self.loadavg_current, 1),
             round(self.loadavg_1m, 1),
             ' '.join('{:03}'.format(round(f, 1)) for f in self.freq_list_ghz),
+            round(self.power_w),
             round(self.temp_c),
         )
 
