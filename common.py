@@ -28,6 +28,10 @@ class log:
         log.logger.addHandler(handler)
 
     @staticmethod
+    def get_level():
+        return log.logger.getEffectiveLevel()
+
+    @staticmethod
     def _log_call(level, *args, **kwargs):
         msg = '{} | {}'.format(
             ' | '.join(str(value) for value in args),

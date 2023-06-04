@@ -1,3 +1,4 @@
+import logging
 import os
 import threading
 import time
@@ -15,22 +16,41 @@ import common
 import network
 
 
-class Battery:
-    BAT_PATH = pathlib.Path('/sys/class/power_supply/BAT1')
+BAT_PATH = pathlib.Path('/sys/class/power_supply/BAT1')
 
+CPU_TEMP_SENSOR_NAME = 'k10temp'  # DEBUG mode grep 'Sensor names'
+CPU_TEMP_CRIT_C = 90
+
+GPU_DEVICE_ID = '0x7340'  # DEBUG mode grep 'GPU device'
+HWMON_PATH = pathlib.Path('/sys/class/hwmon/')
+
+DISK_TEMP_SENSOR_NAME = 'nvme'  # DEBUG mode grep 'Sensor names'
+DISK_TEMP_CRIT_C = 65
+
+PRINT_TO_LOG_PERIOD_S = 60
+
+
+def get_sensors_temperatures():
+    sensors_temp = psutil.sensors_temperatures()
+
+    common.log.debug('Sensor names: {}'.format(sensors_temp.keys()))
+    return sensors_temp
+
+
+class Battery:
     def __init__(self):
         try:
-            with (Battery.BAT_PATH / 'voltage_now').open('r') as file:
+            with (BAT_PATH / 'voltage_now').open('r') as file:
                 self.voltage_now_v = int(file.readline()) / 1000000
-            with (Battery.BAT_PATH / 'voltage_min_design').open('r') as file:
+            with (BAT_PATH / 'voltage_min_design').open('r') as file:
                 self.voltage_min_design_v = int(file.readline()) / 1000000
-            with (Battery.BAT_PATH / 'charge_now').open('r') as file:
+            with (BAT_PATH / 'charge_now').open('r') as file:
                 self.charge_now_ah = int(file.readline()) / 1000000
-            with (Battery.BAT_PATH / 'charge_full').open('r') as file:
+            with (BAT_PATH / 'charge_full').open('r') as file:
                 self.charge_full_ah = int(file.readline()) / 1000000
-            with (Battery.BAT_PATH / 'current_now').open('r') as file:
+            with (BAT_PATH / 'current_now').open('r') as file:
                 self.current_now_a = int(file.readline()) / 1000000
-            with (Battery.BAT_PATH / 'status').open('r') as file:
+            with (BAT_PATH / 'status').open('r') as file:
                 self.charge_status = False if 'Discharging' in file.readline() else True
         except Exception as e:
             common.log.error(e)
@@ -54,9 +74,6 @@ class Battery:
 
 
 class Cpu:
-    TEMP_SENSOR_NAME = 'k10temp'
-    TEMP_CRIT_C = 90
-
     def __init__(self, period_s: float):
         self.cpu_count = psutil.cpu_count()
 
@@ -94,14 +111,14 @@ class Cpu:
 
         self.loadavg_1m = round(os.getloadavg()[0], 1)
 
-        sensors_temp = psutil.sensors_temperatures()
+        sensors_temp = get_sensors_temperatures()
         try:
-            self.temp_c = max(t.current for t in sensors_temp[Cpu.TEMP_SENSOR_NAME])
+            self.temp_c = max(t.current for t in sensors_temp[CPU_TEMP_SENSOR_NAME])
         except Exception as e:
             common.log.error(e)
             self.temp_c = 0
 
-        self.alarm = common.create_temp_alarm('CPU', self.temp_c, Cpu.TEMP_CRIT_C)
+        self.alarm = common.create_temp_alarm('CPU', self.temp_c, CPU_TEMP_CRIT_C)
 
     def _take_freq_list(self) -> None:
         count = 5
@@ -142,9 +159,6 @@ class Cpu:
 
 
 class Gpu:
-    GPU_DEVICE_ID = '0x7340'
-    HWMON_PATH = pathlib.Path('/sys/class/hwmon/')
-
     def __init__(self):
         try:
             hwmon_path = self._find_hwmon()
@@ -170,13 +184,15 @@ class Gpu:
         self.alarm = common.create_temp_alarm('GPU', self.temp2_input_c, self.temp2_crit_c)
 
     def _find_hwmon(self) -> typing.Optional[pathlib.Path]:
-        for hwmon in Gpu.HWMON_PATH.iterdir():
+        for hwmon in HWMON_PATH.iterdir():
             hwmon_device = hwmon / 'device' / 'device'
             if hwmon_device.exists() and hwmon_device.is_file():
                 with hwmon_device.open('r') as file:
-                    if Gpu.GPU_DEVICE_ID in file.readline():
+                    device_id = file.read().splitlines()[0]
+                    common.log.debug('GPU device: {} {}'.format(hwmon_device, device_id))
+                    if GPU_DEVICE_ID in device_id:
                         return hwmon
-        raise Exception('gpu device {} not found. change id.'.format(self.GPU_DEVICE_ID))
+        raise Exception('gpu device {} not found. change id.'.format(GPU_DEVICE_ID))
 
     def __str__(self):
         return '[{:2} W {:2} °C]'.format(
@@ -203,9 +219,6 @@ class Memory:
 
 
 class Disk:
-    TEMP_SENSOR_NAME = 'nvme'
-    TEMP_CRIT_C = 65
-
     def __init__(self):
         self.disk_counters = psutil.disk_io_counters()
         self.counters_time = time.time()
@@ -230,14 +243,14 @@ class Disk:
         # disk_r_t = disk_counters.read_time - self.disk_counters.read_time
         # disk_w_t = disk_counters.write_time - self.disk_counters.write_time
 
-        sensors_temp = psutil.sensors_temperatures()
+        sensors_temp = get_sensors_temperatures()
         try:
-            self.temp_c = max(t.current for t in sensors_temp[Disk.TEMP_SENSOR_NAME])
+            self.temp_c = max(t.current for t in sensors_temp[DISK_TEMP_SENSOR_NAME])
         except Exception as e:
             common.log.error(e)
             self.temp_c = 0
 
-        self.alarm = common.create_temp_alarm('NVME', self.temp_c, Disk.TEMP_CRIT_C)
+        self.alarm = common.create_temp_alarm('NVME', self.temp_c, DISK_TEMP_CRIT_C)
 
     def __str__(self):
         return '[{} MB/s {} MB/s {:2} °C]'.format(
@@ -324,8 +337,6 @@ class HardMonitorInfo:
 
 
 class HardMonitor:
-    PRINT_TO_LOG_PERIOD_S = 60
-
     def __init__(self, period_s: float, force_reload_bt: bool = False):
         sensors.init()
         self.cpu = Cpu(period_s)
@@ -391,7 +402,7 @@ class HardMonitor:
         self.update_counters()
 
         info = HardMonitorInfo(self.network, self.disk, self.cpu, self.bt)
-        if info.get_time() - self.last_log_time > self.PRINT_TO_LOG_PERIOD_S:
+        if info.get_time() - self.last_log_time > PRINT_TO_LOG_PERIOD_S:
             self.last_log_time = info.get_time()
             common.log.info(info)
         return info
