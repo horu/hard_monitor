@@ -11,6 +11,7 @@ import sensors
 import datetime
 import netifaces
 import subprocess
+import locale
 
 import common
 import network
@@ -279,6 +280,7 @@ class Disk:
 
 class Common:
     def __init__(self, bt: network.Bluetooth):
+        locale.setlocale(locale.LC_TIME, 'en_US.utf8')
         self.date_time = datetime.datetime.now()
         self.hour_utc = datetime.datetime.now(datetime.timezone.utc).hour
         self.hour_msc = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=3))).hour
