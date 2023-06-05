@@ -97,7 +97,11 @@ def init():
     return args
 
 
-def convert_speed(speed: float) -> str:
+def convert_2(value: float) -> str:
+    return '{:2}'.format(round(value if value < 99 else 99))
+
+
+def convert_4(speed: float) -> str:
     if speed < 0:
         speed = 0
     elif speed >= 1000:
@@ -109,6 +113,15 @@ def convert_speed(speed: float) -> str:
         speed = round(speed)
 
     return '{:3}'.format(speed)
+
+
+def convert_1_1(value: float) -> str:
+    # return '{:3}'.format(round(value if value < 10 else 9.9, 1))
+    return convert_4(value)
+
+
+def convert_2_1(value: float) -> str:
+    return '{:4}'.format(round(value if value < 100 else 99.9, 1))
 
 
 def create_temp_alarm(name: str, temp: float, limit: float) -> typing.Optional[str]:

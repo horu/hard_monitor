@@ -68,10 +68,10 @@ class Battery:
 
     def __str__(self):
 
-        return '[{}{:2} W {:4} Wh]'.format(
+        return '[{}{} W {} Wh]'.format(
             '+' if self.charge_status else ' ',
-            round(self.power_w),
-            round(self.charge_now_wh, 1),
+            common.convert_2(self.power_w),
+            common.convert_2_1(self.charge_now_wh),
         )
 
 
@@ -114,9 +114,9 @@ class Cpu:
 
         cpu_counters_sum_next = sum(v for k, v in self.cpu_counters._asdict().items() if k != 'idle')
         cpu_counters_sum_prev = sum(v for k, v in cpu_counters_prev._asdict().items() if k != 'idle')
-        self.loadavg_current = round((cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff, 1)
+        self.loadavg_current = (cpu_counters_sum_next - cpu_counters_sum_prev) / time_diff
 
-        self.loadavg_1m = round(os.getloadavg()[0], 1)
+        self.loadavg_1m = os.getloadavg()[0]
         self.power_w = ((self.power_uj_counter - power_uj_counter_prev) / time_diff) / 1000000
 
         sensors_temp = get_sensors_temperatures()
@@ -167,12 +167,12 @@ class Cpu:
                 common.log.error(e)
 
     def __str__(self):
-        return '[{:4} {:4} ({}) Ghz {:2} W {:2} °C]'.format(
-            round(self.loadavg_current, 1),
-            round(self.loadavg_1m, 1),
-            ' '.join('{:03}'.format(round(f, 1)) for f in self.freq_list_ghz),
-            round(self.power_w),
-            round(self.temp_c),
+        return '[{} {} ({}) Ghz {} W {} °C]'.format(
+            common.convert_4(self.loadavg_current),
+            common.convert_4(self.loadavg_1m),
+            ' '.join('{}'.format(common.convert_1_1(f)) for f in self.freq_list_ghz),
+            common.convert_2(self.power_w),
+            common.convert_2(self.temp_c),
         )
 
 
@@ -213,12 +213,12 @@ class Gpu:
         raise Exception('gpu device {} not found. change id.'.format(GPU_DEVICE_ID))
 
     def __str__(self):
-        return '[{:2} W {:2} °C]'.format(
+        return '[{} W {} °C]'.format(
         # return '[({:3} {:3}) Ghz {:2} W {:2} °C]'.format(
             # round(self.freq1_input_ghz, 1),
             # round(self.freq2_input_ghz, 1),
-            round(self.power1_average_w),
-            round(self.temp2_input_c),
+            common.convert_2(self.power1_average_w),
+            common.convert_2(self.temp2_input_c),
         )
 
 
@@ -233,7 +233,7 @@ class Memory:
         self.swap_gb = swap.used / 1024 / 1024 / 1024
 
     def __str__(self):
-        return '[{:3} {:4} GB]'.format(round(self.swap_gb, 1), round(self.used_gb, 1))
+        return '[{} {} GB]'.format(common.convert_4(self.swap_gb), common.convert_2_1(self.used_gb))
 
 
 class Disk:
@@ -271,10 +271,10 @@ class Disk:
         self.alarm = common.create_temp_alarm('NVME', self.temp_c, DISK_TEMP_CRIT_C)
 
     def __str__(self):
-        return '[{} MB/s {} MB/s {:2} °C]'.format(
-            common.convert_speed(self.read_mbps),
-            common.convert_speed(self.write_mbps),
-            round(self.temp_c),
+        return '[{} MB/s {} MB/s {} °C]'.format(
+            common.convert_4(self.read_mbps),
+            common.convert_4(self.write_mbps),
+            common.convert_2(self.temp_c),
         )
 
 
@@ -299,7 +299,7 @@ class Common:
         self.bt = bt
 
     def __str__(self):
-        bt_status = 'B/{:03}'.format(round(self.bt.get_bat_level(), 1))
+        bt_status = 'B/{}'.format(common.convert_1_1(self.bt.get_bat_level()))
         return '[{} {:02}/{:02}/{} {} {} {}]'.format(
             self.date_time.strftime("%a %d.%m.%y"),
             self.hour_utc,
@@ -329,7 +329,7 @@ class TopProcess:
 
     def __str__(self):
         return '[{} {:3}]'.format(
-            ' '.join('{}/{:10}'.format(common.convert_speed(
+            ' '.join('{}/{:10}'.format(common.convert_4(
                     proc[1] / 100), proc[0][:10]) for proc in self.top_process_list),
             self.process_list_size,
         )

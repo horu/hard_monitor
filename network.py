@@ -285,7 +285,7 @@ class Network:
 
         while not self.stopping.is_set():
             try:
-                self.ping_ms = round(ping3.ping('8.8.8.8', unit='ms', timeout=timeout))
+                self.ping_ms = ping3.ping('8.8.8.8', unit='ms', timeout=timeout)
             except Exception as e:
                 common.log.debug('ping error', e)
                 self.ping_ms = None
@@ -310,8 +310,8 @@ class Network:
 
     def __str__(self):
         return '[{} MB/s {} MB/s {:4} ms {:3} MBit]'.format(
-            common.convert_speed(self.recv_mbps),
-            common.convert_speed(self.send_mbps),
-            self.ping_ms if self.ping_ms else '****',
+            common.convert_4(self.recv_mbps),
+            common.convert_4(self.send_mbps),
+            round(self.ping_ms) if self.ping_ms else '****',
             round(self.wlan.bitrate_mbitps) if self.wlan.bitrate_mbitps else '***'
         )
