@@ -27,7 +27,7 @@ GPU_DEVICE_ID = '0x7340'  # DEBUG mode grep 'GPU device'
 HWMON_PATH = pathlib.Path('/sys/class/hwmon/')
 
 DISK_TEMP_SENSOR_NAME = 'nvme'  # DEBUG mode grep 'Sensor names'
-DISK_TEMP_CRIT_C = 65
+DISK_TEMP_CRIT_C = 70  # for WDC PC SN540 max temp is 80
 
 PRINT_TO_LOG_PERIOD_S = 60
 
