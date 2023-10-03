@@ -139,7 +139,7 @@ class Cpu:
 
     def _take_freq_list(self) -> None:
         count = 5
-        freq_list_size = 4
+        freq_list_size = 2
 
         while not self.stopping.is_set():
             try:

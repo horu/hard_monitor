@@ -121,7 +121,9 @@ class Backend:
             self.window.notify(None)
 
     def reset_geometry(self):
-        monitor = QDesktopWidget().screenGeometry(0)
+        # 1 - show on upper monitor
+        # 0 - show on bottom monitor
+        monitor = QDesktopWidget().screenGeometry(1)
         if self.height is None:
             self.window.move(monitor.left(), monitor.top())
         else:
