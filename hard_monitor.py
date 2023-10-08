@@ -139,38 +139,30 @@ class Cpu:
 
     def _take_freq_list(self) -> None:
         count = 5
-        freq_list_size = 2
 
         while not self.stopping.is_set():
             try:
                 # sleep before psutil.cpu_freq call
-                freq_list_min = [9999.9] * freq_list_size
+                freq_list = [9999.9, 9999.9]  # Mhz
                 for _ in range(0, count):
                     time.sleep(self.period_s / count / 2)
                     freqs = psutil.cpu_freq(percpu=True)
-                    freqs_cur = sorted(freq.current for freq in freqs)
-                    el_size = len(freqs_cur) / freq_list_size
+                    freq_cur_list = [freq.current for freq in freqs]
+                    freq_min = min(freq_cur_list)
+                    freq_max = max(freq_cur_list)
 
-                    freq_list = []
-                    el_sum = 0
-                    for i, f in enumerate(freqs_cur):
-                        el_sum += f
-                        if i % el_size == el_size - 1:
-                            freq_list.append(el_sum / el_size)
-                            el_sum = 0
+                    freq_list[0] = min(freq_list[0], freq_min)
+                    freq_list[1] = min(freq_list[1], freq_max)
 
-                    for i, f in enumerate(freq_list):
-                        freq_list_min[i] = min(f, freq_list_min[i])
-
-                self.freq_list_ghz = [f / 1000 for f in freq_list_min]
+                self.freq_list_ghz = [f / 1000 for f in freq_list]
             except Exception as e:
                 common.log.error(e)
 
     def __str__(self):
-        return '[{} {} ({}) Ghz {} W {} °C]'.format(
+        return '[({} {}) {} Ghz {} W {} °C]'.format(
             common.convert_4(self.loadavg_current),
             common.convert_4(self.loadavg_1m),
-            ' '.join('{}'.format(common.convert_1_1(f)) for f in self.freq_list_ghz),
+            '-'.join('{}'.format(common.convert_1_1(f)) for f in self.freq_list_ghz),
             common.convert_2(self.power_w),
             common.convert_2(self.temp_c),
         )
