@@ -309,7 +309,7 @@ class Network:
         self.stopping.set()
 
     def __str__(self):
-        return '[{} MB/s {} MB/s {:4} ms {:3} MB]'.format(
+        return '[{} MB/s {} MB/s {:4} ms {:3} WF]'.format(
             common.convert_4(self.recv_mbps),
             common.convert_4(self.send_mbps),
             round(self.ping_ms) if self.ping_ms else '****',
